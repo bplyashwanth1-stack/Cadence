@@ -421,7 +421,7 @@ final class NowPlaying: ObservableObject {
 
     /// The song time lyrics are drawn at: playback position plus the animation lead and the user's offset.
     func lyricTime(at date: Date) -> Double {
-        position(at: date) + (isPlaying ? visualLead : 0) + Style.shared.v.offset
+        position(at: date) + (isPlaying ? visualLead : 0) + Style.shared.v.offset + AutoSync.shared.offset
     }
 
     var duration: Double { track?.duration ?? 0 }
@@ -509,6 +509,9 @@ final class NowPlaying: ObservableObject {
         if Style.shared.v.audioReactive, let kick = AudioPulse.shared.kick(at: date) { return kick }
         return wordPulse(at: time)
     }
+
+    /// Lyrics were searched for and there are none — the stage switches to its visual-only mode.
+    var noLyrics: Bool { lyrics.isEmpty && status.hasPrefix("No synced") }
 
     func reloadLyrics() {
         guard let track else { return }

@@ -42,6 +42,8 @@ struct StyleValues: Codable, Equatable {
     var keywordBursts = true
     var romanize = false  // Hindi, Urdu, etc. shown in English letters
     var titleCard = true  // song title slams in when a new song starts
+    var autoSync = true  // correct lyric timing from the audio
+    var batterySaver = true  // lighter visuals when unplugged
     var backgroundDarkness = 0.55
     var motion = 0.6
     var beatZoom = true

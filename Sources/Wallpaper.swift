@@ -72,15 +72,18 @@ struct WallpaperBackground: View {
         guard chosen == "auto" else { return (chosen, line, 0, chorus) }
         let director = SceneDirector.shared
         director.update(date: date, section: (index ?? 0) / 4, chorus: chorus)
-        return (Self.autoScenes[director.scene % Self.autoScenes.count], line, director.flash(at: date), chorus)
+        // The kaleidoscope draws the artwork four times; battery saver skips it.
+        let scenes = Power.shared.saving ? Self.autoScenes.filter { $0 != "kaleido" } : Self.autoScenes
+        return (scenes[director.scene % scenes.count], line, director.flash(at: date), chorus)
     }
 
-    /// The chorus gets more motion and the RGB split.
+    /// The chorus gets more motion and the RGB split; battery saver turns the split off (three full-screen copies).
     private func intensified(_ s: StyleValues, _ chorus: Bool) -> StyleValues {
-        guard chorus else { return s }
         var s = s
+        if Power.shared.saving { s.rgbSplit = false }
+        guard chorus else { return s }
         s.motion = min(1, s.motion * 1.5 + 0.1)
-        s.rgbSplit = true
+        s.rgbSplit = !Power.shared.saving
         return s
     }
 
@@ -321,8 +324,9 @@ struct StageEffects: View {
         let t = date.timeIntervalSinceReferenceDate
         let pulse = player.kick(at: time, date: date)
         ZStack {
-            if s.lightLeaks { LightLeaks(t: t, pulse: pulse, palette: player.palette) }
-            if s.particles != "none" { Particles(kind: s.particles, t: t, pulse: pulse, palette: player.palette) }
+            // Battery saver drops the ambient extras; keyword bursts are brief, so they stay.
+            if s.lightLeaks && !Power.shared.saving { LightLeaks(t: t, pulse: pulse, palette: player.palette) }
+            if s.particles != "none" && !Power.shared.saving { Particles(kind: s.particles, t: t, pulse: pulse, palette: player.palette) }
             if s.keywordBursts { KeywordBursts(time: time, palette: player.palette) }
         }
         .allowsHitTesting(false)

@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = Fonts.bundled  // registers the bundled fonts before any view uses them
+        AutoSync.shared.start()
         buildMenu()
         buildWindows()
         NotificationCenter.default.addObserver(self, selector: #selector(buildWindows),

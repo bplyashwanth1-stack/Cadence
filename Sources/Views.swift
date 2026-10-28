@@ -548,21 +548,23 @@ struct StageClock: View {
     }
 }
 
-/// The lock screen is three layers in their own windows' views — background, lyrics, and the cut-out artist on
-/// top — so the full-screen background, which moves slowly, redraws at 30 fps while the lyrics run at 60.
-/// Both outer layers snap to the same 30 fps clock so the cut-out stays exactly on its background.
+/// The lock screen is layered views — background, lyrics, and the cut-out artist — so the full-screen
+/// background, which moves slowly, redraws at 30 fps while the lyrics run at 60 (20 and 30 on battery saver).
+/// The background and cut-out layers snap to the same clock so the cut-out stays exactly on its background.
 private func backdropDate(_ date: Date) -> Date {
-    Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * 30).rounded(.down) / 30)
+    let fps = Power.shared.backdropFPS
+    return Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * fps).rounded(.down) / fps)
 }
 
 struct StageBackdrop: View {
     @ObservedObject private var style = Style.shared
+    @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
         let visible = player.stageVisible(s)
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { context in
+        TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
             let date = backdropDate(context.date)
             let time = player.lyricTime(at: date)
             ZStack {
@@ -579,7 +581,6 @@ struct StageBackdrop: View {
             }
         }
         .environment(\.isStage, true)
-        .onChange(of: visible && s.audioReactive, initial: true) { _, on in AudioPulse.shared.setRunning(on) }
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.6), value: visible)
     }
@@ -590,13 +591,14 @@ struct StageBackdrop: View {
 struct StageDepth: View {
     let overLyrics: Bool
     @ObservedObject private var style = Style.shared
+    @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
         let visible = player.stageVisible(s) && s.depth && s.depthOverLyrics == overLyrics
             && StyleValues.wallpapers.contains(s.stageBackground)
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { context in
+        TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
             let date = backdropDate(context.date)
             if visible {
                 WallpaperBackground(date: date, time: player.lyricTime(at: date), foreground: true)
@@ -610,13 +612,14 @@ struct StageDepth: View {
 
 struct StageView: View {
     @ObservedObject private var style = Style.shared
+    @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
         let visible = player.stageVisible(s)
         // 60 fps: at ProMotion's 120 the lyrics cost twice as much for no visible gain.
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !visible)) { context in
+        TimelineView(.animation(minimumInterval: 1 / power.lyricsFPS, paused: !visible)) { context in
             let time = player.lyricTime(at: context.date)
             ZStack {
                 VStack(alignment: s.horizontal, spacing: 0) {
@@ -624,6 +627,8 @@ struct StageView: View {
                     Spacer(minLength: 0)
                     if TitleCard.showing(player, at: context.date) {
                         TitleCard(date: context.date, time: time)
+                    } else if player.noLyrics {
+                        NoLyricsView(date: context.date)
                     } else if player.lyrics.isEmpty {
                         Text(player.status)
                             .font(s.font(size: s.stageFontSize * 0.3))

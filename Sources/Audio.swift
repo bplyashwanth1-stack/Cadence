@@ -12,9 +12,11 @@ final class AudioPulse {
     struct Snapshot {
         var level: Float = 0  // overall loudness, auto-gained to 0...1
         var bass: Float = 0  // low end, auto-gained to 0...1
+        var vocal: Float = 0  // the 300 Hz–3 kHz band where singing sits, auto-gained to 0...1
         var bands = [Float](repeating: 0, count: AudioPulse.bandCount)
         var lastBeat = Date.distantPast
         var updated = Date.distantPast
+        var lastSound = Date.distantPast  // last time anything above silence came through
     }
 
     static let bandCount = 32
@@ -40,6 +42,7 @@ final class AudioPulse {
     private var bandPeak = [Float](repeating: 1e-6, count: AudioPulse.bandCount)
     private var levelPeak: Float = 1e-6
     private var bassPeak: Float = 1e-6
+    private var vocalPeak: Float = 1e-6
     private var bassAverage: Float = 0
     private var lastBeat = Date.distantPast
 
@@ -51,10 +54,12 @@ final class AudioPulse {
         imag = [Float](repeating: 0, count: fftSize / 2)
     }
 
-    /// Latest analysis, or nil when the tap isn't delivering (no permission, nothing playing, older macOS).
+    /// Latest analysis, or nil when the tap isn't delivering (older macOS) or only delivers silence — which is
+    /// also what a denied permission looks like — so callers fall back to lyric timing.
     func snapshot() -> Snapshot? {
         lock.lock(); defer { lock.unlock() }
-        return Date().timeIntervalSince(state.updated) < 0.5 ? state : nil
+        let now = Date()
+        return now.timeIntervalSince(state.updated) < 0.5 && now.timeIntervalSince(state.lastSound) < 2 ? state : nil
     }
 
     /// 1 on a bass hit, decaying to 0.
@@ -223,6 +228,7 @@ final class AudioPulse {
         let bassEnergy = energy(30, 150)
         let bass = gain(bassEnergy, &bassPeak)
         let level = gain(vDSP.mean(power), &levelPeak)
+        let vocal = gain(energy(300, 3000), &vocalPeak)
 
         // A beat: bass jumps well above its recent average, at most ~4 per second.
         let now = Date()
@@ -235,12 +241,17 @@ final class AudioPulse {
         // Ease towards the new readings so bars don't flicker between callbacks.
         state.level += (level - state.level) * 0.5
         state.bass += (bass - state.bass) * 0.6
+        state.vocal += (vocal - state.vocal) * 0.3
         for i in 0..<Self.bandCount {
             let v = bands[i]
             state.bands[i] = v > state.bands[i] ? v : state.bands[i] * 0.85 + v * 0.15
         }
         state.lastBeat = lastBeat
         state.updated = now
+        if vDSP.maximumMagnitude(ring) > 1e-4 {
+            if state.lastSound == .distantPast { Log.write("audio: hearing music") }
+            state.lastSound = now
+        }
         lock.unlock()
     }
 }

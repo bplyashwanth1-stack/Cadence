@@ -62,6 +62,10 @@ struct SettingsView: View {
 
             Section("Sync") {
                 slider("Timing offset", $style.v.offset, -3...3) { String(format: "%+.1f s", $0) }
+                Toggle("Auto-fix timing from the audio", isOn: $style.v.autoSync)
+                if style.v.autoSync && AutoSync.shared.offset != 0 {
+                    LabeledContent("Auto correction") { Text(String(format: "%+.1f s", AutoSync.shared.offset)) }
+                }
                 Button("Search lyrics again") { player.reloadLyrics() }
             }
 
@@ -149,6 +153,7 @@ struct SettingsView: View {
             Toggle("Title card when a song starts", isOn: $style.v.titleCard)
             Toggle("Now-playing bar (hover for controls)", isOn: $style.v.stageFooter)
             Toggle("Keep screen awake while playing", isOn: $style.v.keepAwake)
+            Toggle("Battery saver — lighter visuals when unplugged", isOn: $style.v.batterySaver)
             Button("Preview for 10 seconds", action: preview)
         }
     }

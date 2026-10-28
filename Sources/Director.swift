@@ -160,3 +160,73 @@ struct TitleCard: View {
         return 1 + c3 * pow(x - 1, 3) + c1 * pow(x - 1, 2)
     }
 }
+
+// MARK: - No lyrics
+
+/// For songs with no timed lyrics: the title and artist big, breathing with the beat, over a mirrored spectrum —
+/// the screen stays alive instead of showing a "no lyrics" message.
+struct NoLyricsView: View {
+    let date: Date
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var player = NowPlaying.shared
+
+    var body: some View {
+        let s = style.v
+        let time = player.lyricTime(at: date)
+        let kick = player.kick(at: time, date: date)
+        let size = s.stageFontSize * 0.6
+        VStack(spacing: size * 0.3) {
+            Text(player.track?.title ?? "")
+                .font(s.font(size: size))
+                .textCase(.uppercase)
+                .tracking(6)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.4)
+                .foregroundStyle(Color.white)
+                .shadow(color: Color(nsColor: player.palette[0]).opacity(0.5 + 0.5 * kick), radius: size * 0.2)
+                .scaleEffect(1 + 0.04 * kick)
+            Text(player.track?.artist ?? "")
+                .font(.system(size: size * 0.3, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.75))
+            SpectrumBars(date: date, kick: kick, palette: player.palette)
+                .frame(width: min(size * 9, 900), height: size * 1.1)
+            Text("No timed lyrics for this song")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .tracking(2)
+                .foregroundStyle(Color.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A row of bars mirrored up and down from a centre line: the live spectrum, or a beat-driven shimmer.
+private struct SpectrumBars: View {
+    let date: Date
+    let kick: Double
+    let palette: [NSColor]
+
+    var body: some View {
+        let bands = AudioPulse.shared.snapshot()?.bands
+        let t = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
+        Canvas { ctx, size in
+            let count = 48
+            let gap = size.width / Double(count)
+            for i in 0..<count {
+                // Bass in the middle, highs out to both sides.
+                let band = abs(i - count / 2) * 2
+                let value: Double
+                if let bands {
+                    value = Double(bands[min(band * bands.count / count, bands.count - 1)])
+                } else {
+                    value = (0.15 + 0.5 * kick) * (0.5 + 0.5 * sin(t * 3 + Double(band) * 0.5))
+                }
+                let height = max(4, value * size.height)
+                let rect = CGRect(x: Double(i) * gap + gap * 0.2, y: (size.height - height) / 2,
+                                  width: gap * 0.6, height: height)
+                let color = Color(nsColor: palette[band * palette.count / (count + 1)])
+                ctx.fill(Path(roundedRect: rect, cornerRadius: gap * 0.3), with: .color(color.opacity(0.5 + 0.5 * value)))
+            }
+        }
+    }
+}

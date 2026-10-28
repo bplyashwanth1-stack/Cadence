@@ -29,6 +29,8 @@ extension StyleValues {
         v.audioReactive = c.audioReactive
         v.romanize = c.romanize
         v.titleCard = c.titleCard
+        v.autoSync = c.autoSync
+        v.batterySaver = c.batterySaver
         v.showOnDesktop = c.showOnDesktop
         v.fontSize = c.fontSize
         v.width = c.width
