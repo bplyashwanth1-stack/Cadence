@@ -57,7 +57,9 @@ final class AutoSync {
             trackID = player.track?.id
             reset()
         }
-        guard player.isPlaying, !player.lyrics.isEmpty, let audio = AudioPulse.shared.snapshot() else { return }
+        // A song you've fixed by hand is left alone.
+        guard player.isPlaying, !player.lyrics.isEmpty, !SongTiming.shared.isManual(player.track?.id),
+              let audio = AudioPulse.shared.snapshot() else { return }
         let position = player.position(at: Date())
         // A seek breaks the history's timeline; start collecting again (the found offset still holds).
         if abs(position - lastPosition - 1 / rate) > 1 { samples = [] }

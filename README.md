@@ -34,6 +34,9 @@ Subs, Galaxy, Highlighter), plus your own. Switch from the menu bar, or with ✨
   lyrics when they're clearly early or late.
 - **Lyrics repair** — when the timed upload is missing lines or mangled, Cadence rebuilds it from the
   complete untimed lyrics, borrowing the timestamps.
+- **Your fixes stick** — nudge a song's timing (menu bar → This Song's Timing) and Cadence remembers it for
+  that song. For a truly broken one, **Tap to Sync**: play it once, press Space as each line starts, and
+  your timing is used from then on.
 - Songs without timed lyrics get a visual mode: the title over a live spectrum.
 
 **Also** — clock, now-playing bar with controls and scrubbing, battery saver (lighter visuals when unplugged),
@@ -77,6 +80,7 @@ rebuilds.
 | `Sources/Core.swift` | Player polling (AppleScript), LRCLIB + LRC parsing, palette, now-playing state, lock-screen space |
 | `Sources/LyricsRepair.swift` | Rebuilding broken timed lyrics from the untimed ones |
 | `Sources/AutoSync.swift` | Auto-fixing lyric timing from the audio; battery detection |
+| `Sources/Timing.swift` | Per-song timing nudges and tap-to-sync |
 | `Sources/Audio.swift` | Core Audio tap: loudness, bass hits, spectrum, vocal band |
 | `Sources/Style.swift` | All settings (`StyleValues`), fonts, romanization |
 | `Sources/Presets.swift` | Built-in and saved presets, preset picker and toast |

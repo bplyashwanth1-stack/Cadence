@@ -37,6 +37,7 @@ struct SettingsView: View {
     let resetPosition: () -> Void
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
+    @ObservedObject private var timing = SongTiming.shared
 
     var body: some View {
         Form {
@@ -61,7 +62,22 @@ struct SettingsView: View {
             desktop
 
             Section("Sync") {
-                slider("Timing offset", $style.v.offset, -3...3) { String(format: "%+.1f s", $0) }
+                if let id = player.track?.id {
+                    slider("This song", Binding(get: { timing.offset(id) }, set: { timing.set($0, for: id) }),
+                           -3...3) { String(format: "%+.2f s", $0) }
+                    HStack {
+                        Button("Tap to sync this song…") {
+                            DistributedNotificationCenter.default().post(name: .init("local.cadence.tapsync"), object: nil)
+                        }
+                        if timing.tappedIDs.contains(id) {
+                            Button("Remove my tapped timing") {
+                                timing.removeTapped(id)
+                                player.reloadLyrics()
+                            }
+                        }
+                    }
+                }
+                slider("All songs", $style.v.offset, -3...3) { String(format: "%+.1f s", $0) }
                 Toggle("Auto-fix timing from the audio", isOn: $style.v.autoSync)
                 if style.v.autoSync && AutoSync.shared.offset != 0 {
                     LabeledContent("Auto correction") { Text(String(format: "%+.1f s", AutoSync.shared.offset)) }

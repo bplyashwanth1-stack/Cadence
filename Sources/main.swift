@@ -115,6 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.player.locked = false
         }
         // Lets scripts trigger the preview: post "local.cadence.preview" as a distributed notification.
+        // Settings' "Tap to sync this song…" button.
+        distributed.addObserver(forName: .init("local.cadence.tapsync"), object: nil, queue: .main) { [weak self] _ in
+            self?.openTapSync()
+        }
         distributed.addObserver(forName: .init("local.cadence.preview"), object: nil, queue: .main) { [weak self] _ in
             self?.preview()
         }
@@ -236,6 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines")], #selector(pickLayout(_:))))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
+        menu.addItem(timingMenu())
         menu.addItem(item("Search Lyrics Again", #selector(reloadLyrics)))
         menu.addItem(item("Launch at Login", #selector(toggleLogin)))
         menu.addItem(.separator())
@@ -329,6 +334,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        // The timing submenu shows this song's current nudge and only offers what applies.
+        if let id = player.track?.id {
+            let nudge = SongTiming.shared.offset(id)
+            for entry in menu.items {
+                if entry.action == #selector(resetSongTiming) {
+                    entry.title = nudge == 0 ? "Reset This Song" : String(format: "Reset This Song (now %+.2f s)", nudge)
+                    entry.isHidden = nudge == 0
+                }
+                if entry.action == #selector(removeTapped) { entry.isHidden = !SongTiming.shared.tappedIDs.contains(id) }
+                if entry.action == #selector(openTapSync) { entry.isEnabled = !player.lyrics.isEmpty }
+            }
+        }
         let states: [String: Bool] = [
             "Show on Lock Screen": style.v.showOnLockScreen,
             "Show on Desktop": style.v.showOnDesktop,
@@ -355,6 +372,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleDesktop() { style.v.showOnDesktop.toggle() }
     @objc private func previewStage() { preview() }
     @objc private func reloadLyrics() { player.reloadLyrics() }
+
+    // MARK: This song's timing
+
+    private var tapSync: TapSyncWindow?
+
+    private func timingMenu() -> NSMenuItem {
+        let parent = NSMenuItem(title: "This Song's Timing", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.delegate = self
+        submenu.addItem(item("Show Lyrics Earlier (0.25 s)", #selector(nudgeEarlier)))
+        submenu.addItem(item("Show Lyrics Later (0.25 s)", #selector(nudgeLater)))
+        submenu.addItem(item("Reset This Song", #selector(resetSongTiming)))
+        submenu.addItem(.separator())
+        submenu.addItem(item("Tap to Sync This Song…", #selector(openTapSync)))
+        submenu.addItem(item("Remove My Tapped Timing", #selector(removeTapped)))
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func nudgeEarlier() { player.track.map { SongTiming.shared.nudge($0.id, by: 0.25) } }
+    @objc private func nudgeLater() { player.track.map { SongTiming.shared.nudge($0.id, by: -0.25) } }
+    @objc private func resetSongTiming() { player.track.map { SongTiming.shared.set(0, for: $0.id) } }
+
+    @objc private func removeTapped() {
+        guard let id = player.track?.id else { return }
+        SongTiming.shared.removeTapped(id)
+        player.reloadLyrics()
+    }
+
+    @objc private func openTapSync() {
+        guard let session = TapSync(player: player) else { return }
+        tapSync?.close()
+        let window = TapSyncWindow(session: session)
+        tapSync = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
 
     @objc private func openSettings() {
         if settings == nil {

@@ -432,6 +432,7 @@ final class NowPlaying: ObservableObject {
     /// The song time lyrics are drawn at: playback position plus the animation lead and the user's offset.
     func lyricTime(at date: Date) -> Double {
         position(at: date) + (isPlaying ? visualLead : 0) + Style.shared.v.offset + AutoSync.shared.offset
+            + SongTiming.shared.offset(track?.id)
     }
 
     var duration: Double { track?.duration ?? 0 }
@@ -536,6 +537,12 @@ final class NowPlaying: ObservableObject {
     }
 
     private func loadLyrics(_ track: Track) {
+        // Lyrics you timed yourself with tap-to-sync win over anything downloaded.
+        if let tapped = SongTiming.shared.tapped(track.id) {
+            lyrics = LRC.parse(tapped)
+            status = ""
+            return
+        }
         if let cached = cache[track.id] {
             lyrics = cached
             status = cached.isEmpty ? "No synced lyrics for this song" : ""
