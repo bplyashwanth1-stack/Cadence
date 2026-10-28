@@ -8,6 +8,9 @@ import SwiftUI
 struct WallpaperBackground: View {
     let date: Date
     let time: Double
+    /// Draws only the cut-out subject of the artwork, lined up exactly with the background, so it can sit on top
+    /// of the lyrics and the words pass behind the artist.
+    var foreground = false
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
@@ -18,7 +21,21 @@ struct WallpaperBackground: View {
         let direction = direct(s.stageBackground, time)
         // Each new line punches in a little; a scene cut punches in hard.
         let pulse = min(1.4, kick + 0.35 * direction.line + direction.cut)
-        if let art = player.wallpaper ?? player.artwork {
+        if foreground {
+            let cutout = direction.scene == "duotone" ? player.duotoneCutout : direction.scene == "motion" ? player.cutout : nil
+            if s.depth, let cutout {
+                GeometryReader { geo in
+                    kenBurnsImage(intensified(s, direction.chorus), cutout, geo.size, t, pulse)
+                        // Same shading the background gets from its darkening layer.
+                        .colorMultiply(Color(white: 1 - (0.1 + s.backgroundDarkness * 0.65)))
+                        .shadow(color: .black.opacity(0.45), radius: 24)
+                }
+                .clipped()
+                .id(direction.scene)
+                .transition(.opacity)
+                .animation(.easeOut(duration: 0.35), value: direction.scene)
+            }
+        } else if let art = player.wallpaper ?? player.artwork {
             GeometryReader { geo in
                 ZStack {
                     Color.black
@@ -101,15 +118,7 @@ struct WallpaperBackground: View {
     @ViewBuilder
     private func kenBurns(_ s: StyleValues, _ art: NSImage, _ size: CGSize, _ t: Double, _ pulse: Double) -> some View {
         let m = s.motion
-        let zoom: Double = 1.12 + 0.14 * m * (0.5 + 0.5 * sin(t * 0.08)) + 0.07 * m * pulse
-        let tilt: Double = sin(t * 0.05) * 2.5 * m
-        let dx: Double = sin(t * 0.061) * size.width * 0.035 * m
-        let dy: Double = cos(t * 0.047) * size.height * 0.035 * m
-        let image = fill(art, size)
-            .brightness(0.06 * pulse)
-            .scaleEffect(zoom)
-            .rotationEffect(.degrees(tilt))
-            .offset(x: dx, y: dy)
+        let image = kenBurnsImage(s, art, size, t, pulse)
         if s.rgbSplit {
             // Red, green and blue copies pulled apart on the beat and added back together.
             let split = (1.5 + 18 * pulse) * max(m, 0.3)
@@ -123,6 +132,19 @@ struct WallpaperBackground: View {
         } else {
             image
         }
+    }
+
+    private func kenBurnsImage(_ s: StyleValues, _ art: NSImage, _ size: CGSize, _ t: Double, _ pulse: Double) -> some View {
+        let m = s.motion
+        let zoom: Double = 1.12 + 0.14 * m * (0.5 + 0.5 * sin(t * 0.08)) + 0.07 * m * pulse
+        let tilt: Double = sin(t * 0.05) * 2.5 * m
+        let dx: Double = sin(t * 0.061) * size.width * 0.035 * m
+        let dy: Double = cos(t * 0.047) * size.height * 0.035 * m
+        return fill(art, size)
+            .brightness(0.06 * pulse)
+            .scaleEffect(zoom)
+            .rotationEffect(.degrees(tilt))
+            .offset(x: dx, y: dy)
     }
 
     /// The sharp cover floating in 3D over its own blurred colours.
@@ -290,6 +312,7 @@ struct StageEffects: View {
         ZStack {
             if s.lightLeaks { LightLeaks(t: t, pulse: pulse, palette: player.palette) }
             if s.particles != "none" { Particles(kind: s.particles, t: t, pulse: pulse, palette: player.palette) }
+            if s.keywordBursts { KeywordBursts(time: time, palette: player.palette) }
         }
         .allowsHitTesting(false)
     }

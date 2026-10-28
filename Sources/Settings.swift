@@ -115,6 +115,7 @@ struct SettingsView: View {
             if StyleValues.wallpapers.contains(style.v.stageBackground) {
                 slider("Motion", $style.v.motion, 0...1) { String(format: "%.0f%%", $0 * 100) }
                 Toggle("Kick on the beat", isOn: $style.v.beatZoom)
+                Toggle("Lyrics behind the artist (motion and duotone scenes)", isOn: $style.v.depth)
                 if ["motion", "duotone"].contains(style.v.stageBackground) {
                     Toggle("RGB split", isOn: $style.v.rgbSplit)
                 }
@@ -127,6 +128,7 @@ struct SettingsView: View {
                 Text("Dust").tag("dust")
             }
             Toggle("Light leaks", isOn: $style.v.lightLeaks)
+            Toggle("Keyword bursts — fire, rain, hearts, stars… when sung", isOn: $style.v.keywordBursts)
             Toggle("React to the music (asks to listen to audio)", isOn: $style.v.audioReactive)
             Picker("Behind the lyrics", selection: $style.v.lyricsBacking) {
                 Text("Nothing").tag("none")
@@ -160,6 +162,7 @@ struct SettingsView: View {
                 }
             }
             Toggle("ALL CAPS", isOn: $style.v.uppercase)
+            Toggle("Hindi, Urdu etc. in English letters", isOn: $style.v.romanize)
             Toggle("Italic", isOn: $style.v.italic)
             slider("Letter spacing", $style.v.tracking, -3...10) { String(format: "%.1f", $0) }
             slider("Line spacing", $style.v.lineSpacing, 0...60) { String(format: "%.0f", $0) }

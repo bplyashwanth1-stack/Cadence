@@ -86,7 +86,7 @@ struct WordView: View {
     var body: some View {
         let s = style.v
         let size = self.size ?? (isStage ? s.stageFontSize * 0.5 : s.fontSize)
-        let string = s.uppercase ? word.text.uppercased() : word.text
+        let string = s.display(word.text)
         let base = Text(string).font(s.font(size: size)).tracking(s.tracking)
         let dim = AnyShapeStyle(Color.white.opacity(s.unsungOpacity))
         if !active {
@@ -581,6 +581,10 @@ struct StageView: View {
                 .padding(.horizontal, 90)
                 .padding(.top, 44)
                 .padding(.bottom, 40)
+                if s.depth && StyleValues.wallpapers.contains(s.stageBackground) {
+                    WallpaperBackground(date: context.date, time: time, foreground: true)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .environment(\.isStage, true)

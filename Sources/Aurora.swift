@@ -1,6 +1,7 @@
 import AppKit
 import CoreImage
 import SwiftUI
+import Vision
 
 /// A living backdrop: flowing mesh of album colours, the artwork blurred into it, vignette and film grain.
 struct AuroraBackground: View {
@@ -111,6 +112,37 @@ enum Backdrop {
         let output = input
             .applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.25])
             .applyingFilter("CIFalseColor", parameters: ["inputColor0": ci(dark), "inputColor1": ci(light)])
+        return render(output, extent: input.extent)
+    }
+
+    /// Mask of the main subject (usually the artist) in the artwork, or nil when there's no clear one —
+    /// text-only covers, landscapes, or a "subject" that fills most of the picture.
+    static func subjectMask(_ image: NSImage) -> CIImage? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        let handler = VNImageRequestHandler(cgImage: cg)
+        guard (try? handler.perform([request])) != nil, let result = request.results?.first,
+              let buffer = try? result.generateScaledMaskForImage(forInstances: result.allInstances, from: handler)
+        else { return nil }
+        let mask = CIImage(cvPixelBuffer: buffer)
+        var average = [Float](repeating: 0, count: 4)
+        let area = mask.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: mask.extent)])
+        context.render(area, toBitmap: &average, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                       format: .RGBAf, colorSpace: nil)
+        guard average[0] > 0.04, average[0] < 0.6 else { return nil }
+        // Soften the edge a touch so the cut doesn't look like a sticker.
+        return mask.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.2])
+            .cropped(to: mask.extent)
+    }
+
+    static func cutout(_ image: NSImage, mask: CIImage) -> NSImage? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let input = CIImage(cgImage: cg)
+        let fitted = mask.transformed(by: CGAffineTransform(scaleX: input.extent.width / mask.extent.width,
+                                                            y: input.extent.height / mask.extent.height))
+        let output = input.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: fitted,
+        ])
         return render(output, extent: input.extent)
     }
 

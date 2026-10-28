@@ -37,6 +37,9 @@ struct StyleValues: Codable, Equatable {
     var stageDrift = true
     var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, aurora, album, gradient, custom, black
     var audioReactive = true
+    var depth = true  // lyrics pass behind the artist cut out of the artwork
+    var keywordBursts = true
+    var romanize = false  // Hindi, Urdu, etc. shown in English letters
     var backgroundDarkness = 0.55
     var motion = 0.6
     var beatZoom = true
@@ -87,6 +90,12 @@ final class Style: ObservableObject {
 
 extension StyleValues {
     /// Backgrounds made from the artwork itself (see Wallpaper.swift).
+    /// A lyric word as shown: in English letters when romanizing, and in caps when asked.
+    func display(_ text: String) -> String {
+        let shown = romanize ? Romanizer.latin(text) : text
+        return uppercase ? shown.uppercased() : shown
+    }
+
     /// Every word effect, as (tag, label) — shared by Settings and the menu bar.
     static let wordEffects: [(String, String)] = [
         ("comet", "Comet — a comet streaks through the words"),
@@ -215,6 +224,34 @@ extension EnvironmentValues {
     var isStage: Bool {
         get { self[StageKey.self] }
         set { self[StageKey.self] = newValue }
+    }
+}
+
+/// Turns Indian-script lyrics ("पारो") into plain English letters ("paro"). Cached, since words are redrawn every
+/// frame. Urdu and Arabic are left alone: they don't write most vowels, so the result is unreadable ("tm hw").
+enum Romanizer {
+    private static var cache: [String: String] = [:]
+
+    static func latin(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { (0x0900...0x0DFF).contains($0.value) }) else { return text }
+        if let hit = cache[text] { return hit }
+        let latin = text.split(separator: " ", omittingEmptySubsequences: false).map(word).joined(separator: " ")
+        cache[text] = latin
+        return latin
+    }
+
+    /// Hindi drops the vowel a consonant would carry at the end of a word — दिल is "dil", not "dila".
+    private static func word(_ token: Substring) -> String {
+        var latin = String(token).applyingTransform(.toLatin, reverse: false)?
+            .applyingTransform(.stripDiacritics, reverse: false) ?? String(token)
+        let letters = token.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        let nukta: UInt32 = 0x093C
+        let last = letters.last { $0.value != nukta }?.value ?? 0
+        let endsInConsonant = (0x0915...0x0939).contains(last) || (0x0958...0x095F).contains(last)
+        if endsInConsonant, let a = latin.lastIndex(of: "a"), latin[latin.index(after: a)...].allSatisfy({ !$0.isLetter }) {
+            latin.remove(at: a)
+        }
+        return latin
     }
 }
 

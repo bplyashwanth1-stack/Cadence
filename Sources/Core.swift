@@ -380,8 +380,13 @@ final class NowPlaying: ObservableObject {
             let keys = lyrics.map { $0.words.map(\.text).joined(separator: " ").lowercased().filter(\.isLetter) }
             let counts = Dictionary(keys.filter { $0.count > 6 }.map { ($0, 1) }, uniquingKeysWith: +)
             repeated = Set(keys.indices.filter { (counts[keys[$0]] ?? 0) > 1 })
+            bursts = words.enumerated().compactMap { i, word in
+                Burst.kind(for: word.text).map { (i, word.start, $0) }
+            }
         }
     }
+    /// Sung words that set off a keyword burst, in order.
+    private(set) var bursts: [(index: Int, start: Double, kind: Burst)] = []
     /// The lyric line each entry of `words` belongs to.
     private(set) var wordLines: [Int] = []
     /// Lines sung more than once — roughly the chorus, where the visuals push harder.
@@ -394,6 +399,8 @@ final class NowPlaying: ObservableObject {
     @Published private(set) var backdrop: NSImage?  // artwork, small and already blurred
     @Published private(set) var wallpaper: NSImage?  // artwork, sharp and capped in size
     @Published private(set) var duotone: NSImage?  // artwork printed in two album colours
+    @Published private(set) var cutout: NSImage?  // just the person/subject of `wallpaper`, transparent elsewhere
+    @Published private(set) var duotoneCutout: NSImage?
     @Published var locked = false
     @Published var previewing = false  // shows the lock-screen view on the desktop briefly
 
@@ -550,6 +557,10 @@ final class NowPlaying: ObservableObject {
         let backdrop = Backdrop.blurred(image)
         let wallpaper = Backdrop.wallpaper(image)
         let duotone = Backdrop.duotone(image, palette: palette)
+        let mask = wallpaper.flatMap(Backdrop.subjectMask)
+        let cutout = mask.flatMap { mask in wallpaper.flatMap { Backdrop.cutout($0, mask: mask) } }
+        let duotoneCutout = mask.flatMap { mask in duotone.flatMap { Backdrop.cutout($0, mask: mask) } }
+        Log.write("artwork subject cut-out: \(cutout == nil ? "none" : "found")")
         DispatchQueue.main.async {
             guard self.track?.id == track.id else { return }
             self.palette = palette
@@ -557,6 +568,8 @@ final class NowPlaying: ObservableObject {
             self.backdrop = backdrop
             self.wallpaper = wallpaper
             self.duotone = duotone
+            self.cutout = cutout
+            self.duotoneCutout = duotoneCutout
         }
     }
 }

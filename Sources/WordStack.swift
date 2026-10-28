@@ -108,7 +108,7 @@ struct StackWord: View {
         let s = style.v
         let sizes = [0.42, 0.6, 0.8, 1.0]
         let size = s.stageFontSize * sizes[Int(noise(index, 1) * Double(sizes.count))]
-        let string = s.uppercase ? word.text.uppercased() : word.text
+        let string = s.display(word.text)
         let symbol = s.stageIcons ? WordIcons.symbol(for: word.text) : nil
         let iconFirst = noise(index, 4) < 0.5
 
