@@ -23,7 +23,8 @@ final class StageWindow: NSWindow {
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         // Separate layers so the slow background doesn't redraw at the lyrics' frame rate (see StageBackdrop).
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-        for root in [AnyView(StageBackdrop()), AnyView(StageView()), AnyView(StageDepth())] {
+        for root in [AnyView(StageBackdrop()), AnyView(StageDepth(overLyrics: false)), AnyView(StageView()),
+                     AnyView(StageDepth(overLyrics: true))] {
             let hosting = NSHostingView(rootView: root)
             hosting.sizingOptions = []
             hosting.frame = container.bounds

@@ -119,7 +119,10 @@ struct SettingsView: View {
             if StyleValues.wallpapers.contains(style.v.stageBackground) {
                 slider("Motion", $style.v.motion, 0...1) { String(format: "%.0f%%", $0 * 100) }
                 Toggle("Kick on the beat", isOn: $style.v.beatZoom)
-                Toggle("Lyrics behind the artist (motion and duotone scenes)", isOn: $style.v.depth)
+                Toggle("Artist in front of the clock (motion and duotone scenes)", isOn: $style.v.depth)
+                if style.v.depth {
+                    Toggle("…and in front of the lyrics (can hide words)", isOn: $style.v.depthOverLyrics)
+                }
                 if ["motion", "duotone"].contains(style.v.stageBackground) {
                     Toggle("RGB split", isOn: $style.v.rgbSplit)
                 }

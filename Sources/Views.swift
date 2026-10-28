@@ -569,6 +569,13 @@ struct StageBackdrop: View {
                 StageBackground(date: date, time: time)
                 StageEffects(date: date, time: time)
                 if s.edgeGlow { EdgeGlow(time: time, date: date) }
+                // The clock lives here, under the cut-out artist; the lyrics layer keeps an invisible copy for layout.
+                if s.stageClock {
+                    StageClock(date: date)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.horizontal, 90)
+                        .padding(.top, 44)
+                }
             }
         }
         .environment(\.isStage, true)
@@ -578,14 +585,17 @@ struct StageBackdrop: View {
     }
 }
 
-/// The artist cut out of the artwork, drawn above the lyrics.
+/// The artist cut out of the artwork. There are two of these layers, under and over the lyrics; the clock is
+/// drawn in the backdrop, so either way the artist stands in front of the clock, like the iPhone lock screen.
 struct StageDepth: View {
+    let overLyrics: Bool
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
-        let visible = player.stageVisible(s) && s.depth && StyleValues.wallpapers.contains(s.stageBackground)
+        let visible = player.stageVisible(s) && s.depth && s.depthOverLyrics == overLyrics
+            && StyleValues.wallpapers.contains(s.stageBackground)
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { context in
             let date = backdropDate(context.date)
             if visible {
@@ -610,7 +620,7 @@ struct StageView: View {
             let time = player.lyricTime(at: context.date)
             ZStack {
                 VStack(alignment: s.horizontal, spacing: 0) {
-                    if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity) }
+                    if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity).hidden() }
                     Spacer(minLength: 0)
                     if TitleCard.showing(player, at: context.date) {
                         TitleCard(date: context.date, time: time)
@@ -631,6 +641,10 @@ struct StageView: View {
                 .padding(.horizontal, 90)
                 .padding(.top, 44)
                 .padding(.bottom, 40)
+                // Which preset the ✨ button just switched to, above the now-playing bar.
+                PresetToastView(date: context.date)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 170)
             }
         }
         .environment(\.isStage, true)

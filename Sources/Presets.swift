@@ -154,6 +154,64 @@ enum Presets {
     ]
 }
 
+extension Presets {
+    /// Every preset in menu order — built-in first, then the user's — as (name, symbol, values).
+    static func all(keeping current: StyleValues) -> [(name: String, symbol: String, values: StyleValues)] {
+        builtIn.map { ($0.name, $0.symbol, $0.values(keeping: current)) }
+            + PresetStore.shared.custom.map { ($0.name, "star.fill", $0.values(keeping: current)) }
+    }
+
+    /// Switches to the preset after the current one (or the first, if the current look isn't a preset) and
+    /// flashes its name — for the ✨ button on the lock screen, where there's no menu bar.
+    static func next() {
+        let style = Style.shared
+        let list = all(keeping: style.v)
+        let current = list.firstIndex { $0.values == style.v }
+        let pick = list[current.map { ($0 + 1) % list.count } ?? 0]
+        style.v = pick.values
+        PresetToast.shared.show(pick.name, pick.symbol)
+    }
+}
+
+/// The name of a preset just switched to, shown briefly on the lock screen.
+final class PresetToast: ObservableObject {
+    static let shared = PresetToast()
+    @Published private(set) var name = ""
+    @Published private(set) var symbol = "sparkles"
+    @Published private(set) var shownAt = Date.distantPast
+
+    func show(_ name: String, _ symbol: String) {
+        self.name = name
+        self.symbol = symbol
+        shownAt = Date()
+    }
+}
+
+struct PresetToastView: View {
+    let date: Date
+    @ObservedObject private var toast = PresetToast.shared
+
+    var body: some View {
+        let age = date.timeIntervalSince(toast.shownAt)
+        if age >= 0 && age < 1.8 {
+            let appear = min(age / 0.2, 1)
+            let fade = min(max((1.8 - age) / 0.4, 0), 1)
+            HStack(spacing: 10) {
+                Image(systemName: toast.symbol)
+                Text(toast.name)
+            }
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+            .scaleEffect(0.8 + 0.2 * appear)
+            .opacity(appear * fade)
+        }
+    }
+}
+
 struct CustomPreset: Codable, Identifiable {
     var id: String { name }
     let name: String

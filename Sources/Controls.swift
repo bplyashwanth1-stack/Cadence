@@ -119,6 +119,8 @@ struct NowPlayingBar: View {
             button("backward.fill", size: 20) { player.control("previous track") }
             button(player.isPlaying ? "pause.fill" : "play.fill", size: 28) { player.control("playpause") }
             button("forward.fill", size: 20) { player.control("next track") }
+            button("sparkles", size: 20) { Presets.next() }
+                .help("Next preset")
         }
         .padding(.leading, 4)
     }

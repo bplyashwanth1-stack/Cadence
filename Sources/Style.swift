@@ -37,7 +37,8 @@ struct StyleValues: Codable, Equatable {
     var stageDrift = true
     var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, aurora, album, gradient, custom, black
     var audioReactive = true
-    var depth = true  // lyrics pass behind the artist cut out of the artwork
+    var depth = true  // the artist cut out of the artwork stands in front of the clock
+    var depthOverLyrics = false  // …and in front of the lyrics too (can hide the word being sung)
     var keywordBursts = true
     var romanize = false  // Hindi, Urdu, etc. shown in English letters
     var titleCard = true  // song title slams in when a new song starts
