@@ -244,10 +244,22 @@ enum Romanizer {
         return latin
     }
 
+    /// Any Indian script in the letters people actually type: macOS's converter writes the academic system,
+    /// where "c" is "ch" and "ś"/"ṣ" are "sh" ("premapicci" → "premapichchi", "raksasive" → "rakshasive").
+    static func casual(_ text: String) -> String {
+        guard var latin = text.applyingTransform(.toLatin, reverse: false) else { return text }
+        latin = latin.replacingOccurrences(of: "ch", with: "chh")  // aspirated c, before plain c becomes "ch"
+            .replacingOccurrences(of: "c", with: "ch")
+            .replacingOccurrences(of: "ś", with: "sh")
+            .replacingOccurrences(of: "ṣ", with: "sh")
+            .replacingOccurrences(of: "r̥", with: "ru")
+            .replacingOccurrences(of: "m̐", with: "n")  // chandrabindu: चाँद is "chand"
+        return latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin
+    }
+
     /// Hindi drops the vowel a consonant would carry at the end of a word — दिल is "dil", not "dila".
     private static func word(_ token: Substring) -> String {
-        var latin = String(token).applyingTransform(.toLatin, reverse: false)?
-            .applyingTransform(.stripDiacritics, reverse: false) ?? String(token)
+        var latin = casual(String(token))
         let letters = token.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
         let nukta: UInt32 = 0x093C
         let last = letters.last { $0.value != nukta }?.value ?? 0

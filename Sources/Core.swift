@@ -163,6 +163,7 @@ struct LyricLine: Identifiable {
 enum LRCLib {
     private struct Item: Decodable {
         let syncedLyrics: String?
+        let plainLyrics: String?
         let duration: Double?
     }
 
@@ -203,6 +204,15 @@ enum LRCLib {
             $0.lrc.contains("<") && $0.lrc.contains(">") && distance($0.starts, candidates[best].starts) < 0.4
         }) {
             return wordTimed.lrc
+        }
+        // Timed uploads are sometimes missing lines or mangled; the untimed lyrics of the closest-length upload
+        // can fill them in (see LyricsRepair).
+        let plain = items
+            .filter { $0.plainLyrics?.isEmpty == false }
+            .min { abs(($0.duration ?? 0) - track.duration) < abs(($1.duration ?? 0) - track.duration) }?
+            .plainLyrics
+        if let plain, let repaired = LyricsRepair.repair(synced: candidates[best].lrc, plain: plain) {
+            return repaired
         }
         return candidates[best].lrc
     }
