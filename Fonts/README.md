@@ -8,4 +8,4 @@ Abril Fatface, Anton, Archivo Black, Bebas Neue, Bungee, Caveat, Dancing Script,
 Manrope, Monoton, Montserrat, Oswald, Pacifico, Playfair Display, Poppins, Righteous, Sora, Space Grotesk,
 Syne, Unbounded.
 
-Before distributing builds publicly, add each family's `OFL.txt` (found next to the font in google/fonts).
+Each family's license is in `licenses/`, copied from google/fonts.
