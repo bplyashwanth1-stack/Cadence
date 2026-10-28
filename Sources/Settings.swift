@@ -78,10 +78,22 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             if style.v.stageLayout == "stack" {
+                Picker("Word being sung", selection: $style.v.stackStyle) {
+                    Text("Word effect (from Animation below)").tag("effect")
+                    Text("Highlighter box").tag("box")
+                }
                 Toggle("Icons beside words", isOn: $style.v.stageIcons)
                 Toggle("3D drift", isOn: $style.v.stageDrift)
             }
             Picker("Background", selection: $style.v.stageBackground) {
+                Text("Auto — cuts between scenes, harder on the chorus").tag("auto")
+                Text("Motion wallpaper — artwork drifts and kicks").tag("motion")
+                Text("Floating cover — artwork tilting in 3D").tag("cover")
+                Text("Disc — spinning disc with a visualizer ring").tag("disc")
+                Text("Duotone — artwork in two album colors").tag("duotone")
+                Text("Vinyl — spinning record").tag("vinyl")
+                Text("Kaleidoscope — mirrored artwork").tag("kaleido")
+                Divider()
                 Text("Aurora — flowing album colors and artwork").tag("aurora")
                 Text("Album color").tag("album")
                 Text("Album gradient").tag("gradient")
@@ -94,10 +106,33 @@ struct SettingsView: View {
                     set: { style.v.stageHex = $0.hex }
                 ), supportsOpacity: false)
             }
-            if ["aurora", "album", "gradient"].contains(style.v.stageBackground) {
+            if ["aurora", "album", "gradient"].contains(style.v.stageBackground)
+                || StyleValues.wallpapers.contains(style.v.stageBackground) {
                 slider("Background darkness", $style.v.backgroundDarkness, 0...0.95) {
                     String(format: "%.0f%%", $0 * 100)
                 }
+            }
+            if StyleValues.wallpapers.contains(style.v.stageBackground) {
+                slider("Motion", $style.v.motion, 0...1) { String(format: "%.0f%%", $0 * 100) }
+                Toggle("Kick on the beat", isOn: $style.v.beatZoom)
+                if ["motion", "duotone"].contains(style.v.stageBackground) {
+                    Toggle("RGB split", isOn: $style.v.rgbSplit)
+                }
+            }
+            Picker("Particles", selection: $style.v.particles) {
+                Text("None").tag("none")
+                Text("Bokeh").tag("bokeh")
+                Text("Stars").tag("stars")
+                Text("Embers").tag("embers")
+                Text("Dust").tag("dust")
+            }
+            Toggle("Light leaks", isOn: $style.v.lightLeaks)
+            Toggle("React to the music (asks to listen to audio)", isOn: $style.v.audioReactive)
+            Picker("Behind the lyrics", selection: $style.v.lyricsBacking) {
+                Text("Nothing").tag("none")
+                Text("Soft shade").tag("shade")
+                Text("Glass card").tag("glass")
+                Text("Band").tag("band")
             }
             slider("Lyrics size", $style.v.stageFontSize, 60...300) { String(format: "%.0f pt", $0) }
             Toggle("Edge glow (pulses with the vocals)", isOn: $style.v.edgeGlow)
@@ -160,16 +195,12 @@ struct SettingsView: View {
     private var animation: some View {
         Section("Animation") {
             Picker("Word effect", selection: $style.v.wordStyle) {
-                Text("Reveal — words rise in as sung").tag("reveal")
-                Text("Bounce — words spring in").tag("bounce")
-                Text("Bloom — words flash in and settle").tag("bloom")
-                Text("Typewriter — letter by letter").tag("typewriter")
-                Text("Karaoke fill — colour sweeps through").tag("fill")
-                Text("Wave — karaoke fill that floats").tag("wave")
-                Text("Pop — words hop when sung").tag("pop")
-                Text("Fade — words brighten").tag("fade")
+                Text("Mix — a different effect each line, punchier on the chorus").tag("mix")
+                Divider()
+                ForEach(StyleValues.wordEffects, id: \.0) { Text($0.1).tag($0.0) }
             }
             Picker("Line transition", selection: $style.v.transition) {
+                Text("Mix — changes every line").tag("mix")
                 Text("Zoom through").tag("zoom")
                 Text("Flip").tag("flip")
                 Text("Slide up").tag("slide")

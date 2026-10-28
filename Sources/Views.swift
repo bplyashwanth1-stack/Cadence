@@ -76,13 +76,16 @@ struct WordView: View {
     let index: Int
     let time: Double
     let active: Bool  // belongs to the line being sung
+    var size: Double? = nil  // the word stack sizes each word itself
+    var connects = true  // a following word sits to the right, so the comet trail runs on into the gap
+    var line = 0  // lyric line the word belongs to, so Mix can pick an effect per line
     @Environment(\.isStage) private var isStage
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
-        let size = isStage ? s.stageFontSize * 0.5 : s.fontSize
+        let size = self.size ?? (isStage ? s.stageFontSize * 0.5 : s.fontSize)
         let string = s.uppercase ? word.text.uppercased() : word.text
         let base = Text(string).font(s.font(size: size)).tracking(s.tracking)
         let dim = AnyShapeStyle(Color.white.opacity(s.unsungOpacity))
@@ -102,7 +105,7 @@ struct WordView: View {
         let glow = s.glowColor(player.palette, onStage: isStage)
         let radius = size * 0.3 * s.glow
 
-        switch s.wordStyle {
+        switch s.wordStyle(line: line, chorus: player.repeated.contains(line)) {
         case "reveal":
             // Unsung words are invisible; each one rises and un-blurs into place.
             let e = easeOutCubic(appear)
@@ -154,8 +157,139 @@ struct WordView: View {
                 .opacity(s.unsungOpacity + (1 - s.unsungOpacity) * progress)
                 .shadow(color: glow.opacity(s.glow * progress), radius: radius)
 
+        case "comet":
+            // A comet streaks along under the line, lighting each word as it passes; its trail runs on into
+            // the gap so the trails join the words up, then fades.
+            let fade = clamp(1 - (time - word.end) / 1.4)
+            base.foregroundStyle(progress > 0 ? lit : dim)
+                .scaleEffect(appear > 0 ? 1 + 0.08 * (1 - easeOutCubic(appear)) : 1)
+                .shadow(color: glow.opacity(progress > 0 ? s.glow : 0), radius: radius)
+                .overlay {
+                    if progress > 0 {
+                        CometTrail(progress: progress, fade: fade, gap: connects ? size * 0.28 : 0,
+                                   color: accent(s), size: size)
+                    }
+                }
+
+        case "glitch":
+            // Lands with a jittery red/cyan split, then settles clean.
+            let shake = appear > 0 ? 1 - appear : 0
+            let dx = size * 0.09 * shake
+            let jx = noise(Int(time * 24) &+ index &* 97, 7) * 2 - 1
+            let jy = noise(Int(time * 24) &+ index &* 97, 8) * 2 - 1
+            ZStack {
+                base.foregroundStyle(Color(red: 1, green: 0.1, blue: 0.35))
+                    .offset(x: -dx + jx * dx, y: jy * dx * 0.5).opacity(shake)
+                base.foregroundStyle(Color(red: 0.1, green: 0.95, blue: 1))
+                    .offset(x: dx - jx * dx, y: -jy * dx * 0.5).opacity(shake)
+                base.foregroundStyle(appear > 0 ? lit : dim)
+                    .offset(x: jx * dx * 0.4)
+            }
+            .shadow(color: glow.opacity(appear > 0 ? s.glow : 0), radius: radius)
+
+        case "neon":
+            // Flickers on like a neon sign, then holds a hot layered glow.
+            let pattern = [1, 0.1, 1, 0.3, 0.1, 1, 0.6, 1]
+            let flicker = appear <= 0 ? 0 : appear >= 1 ? 1 : pattern[min(Int(appear * 8), 7)]
+            let neon = accent(s)
+            base.foregroundStyle(appear > 0 ? AnyShapeStyle(Color.white) : dim)
+                .shadow(color: neon.opacity(flicker), radius: size * 0.06)
+                .shadow(color: neon.opacity(flicker * 0.9), radius: size * 0.2)
+                .shadow(color: neon.opacity(flicker * max(s.glow, 0.3)), radius: size * 0.5)
+                .opacity(appear > 0 ? 0.35 + 0.65 * flicker : 1)
+
+        case "slam":
+            // Hits big and fast, with a shake on impact.
+            let hit = clamp((time - word.start) / 0.16)
+            let after = clamp((time - word.start - 0.16) / 0.35)
+            let shake = hit >= 1 ? (1 - after) * sin(time * 90) * size * 0.035 : 0
+            base.foregroundStyle(lit)
+                .scaleEffect(1 + 1.6 * pow(1 - hit, 2))
+                .blur(radius: (1 - hit) * 6)
+                .opacity(hit > 0 ? 1 : 0)
+                .offset(x: shake, y: shake * 0.6)
+                .shadow(color: glow.opacity(hit > 0 ? s.glow : 0), radius: radius)
+
+        case "scramble":
+            // Random glyphs decode into the word, left to right.
+            let chars = Array(string)
+            let span = min(max(word.end - word.start, 0.2), 0.6)
+            let resolved = Int(clamp((time - word.start) / span) * Double(chars.count))
+            let glyphs = Array("ABCDEFGHJKLMNPQRSTUVWXYZ#$%&*@!?")
+            let shown = time < word.start ? "" : String(chars.enumerated().map { i, c in
+                i < resolved || !c.isLetter ? c : glyphs[Int(noise(Int(time * 20) &+ i &* 31 &+ index &* 7, 9) * Double(glyphs.count))]
+            })
+            base.foregroundStyle(Color.clear)
+                .overlay(alignment: .leading) {
+                    Text(shown).font(s.font(size: size)).tracking(s.tracking)
+                        .foregroundStyle(lit)
+                        .fixedSize()
+                }
+                .shadow(color: glow.opacity(appear > 0 ? s.glow : 0), radius: radius)
+
+        case "flip":
+            // Each word flips up into place like a split-flap board.
+            base.foregroundStyle(lit)
+                .rotation3DEffect(.degrees((1 - easeOutBack(appear)) * -90), axis: (x: 1, y: 0, z: 0),
+                                  anchor: .bottom, perspective: 0.5)
+                .opacity(clamp(appear * 2.5))
+                .shadow(color: glow.opacity(s.glow * appear), radius: radius)
+
+        case "cascade":
+            // Letters drop in one after another.
+            HStack(spacing: 0) {
+                ForEach(Array(string.enumerated()), id: \.offset) { i, c in
+                    let a = clamp((time - word.start - Double(i) * 0.035) / 0.32)
+                    Text(String(c)).font(s.font(size: size)).tracking(s.tracking)
+                        .foregroundStyle(lit)
+                        .opacity(a)
+                        .offset(y: (1 - easeOutBack(a)) * -size * 0.5)
+                        .rotationEffect(.degrees((1 - a) * 20))
+                }
+            }
+            .shadow(color: glow.opacity(appear > 0 ? s.glow : 0), radius: radius)
+
+        case "highlight":
+            // A marker swipes behind the word as it's sung.
+            let pad = size * 0.12
+            base.foregroundStyle(progress > 0 ? AnyShapeStyle(s.usesWhite(onStage: isStage) ? Color.black : .white) : dim)
+                .padding(.horizontal, pad)
+                .background(alignment: .leading) {
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: pad, style: .continuous)
+                            .fill(lit)
+                            .frame(width: geo.size.width * clamp(progress * 1.05))
+                            .rotationEffect(.degrees(-1.5))
+                    }
+                }
+                .padding(.horizontal, -pad)
+                .shadow(color: glow.opacity(progress > 0 ? s.glow * 0.6 : 0), radius: radius)
+
+        case "shine":
+            // Karaoke fill, then a white sheen glides across the finished word.
+            let sweep = clamp((time - word.end) / 0.6) * 1.6 - 0.3
+            fill(base, lit, dim, glow, radius, s, progress)
+                .overlay {
+                    if sweep > -0.3 && sweep < 1.3 {
+                        base.foregroundStyle(Color.white)
+                            .mask(LinearGradient(stops: [.init(color: .clear, location: clamp(sweep - 0.25)),
+                                                         .init(color: .white, location: clamp(sweep)),
+                                                         .init(color: .clear, location: clamp(sweep + 0.25))],
+                                                 startPoint: .leading, endPoint: .trailing))
+                    }
+                }
+
         default:
             fill(base, lit, dim, glow, radius, s, progress)
+        }
+    }
+
+    /// A saturated album colour for effects that need a real hue even when the text is white.
+    private func accent(_ s: StyleValues) -> Color {
+        switch s.colorMode {
+        case "white": return .white
+        case "custom": return Color(hex: s.customHex)
+        default: return Color(nsColor: player.palette[0])
         }
     }
 
@@ -169,6 +303,40 @@ struct WordView: View {
         return base.foregroundStyle(dim)
             .overlay { base.foregroundStyle(lit).mask(mask) }
             .shadow(color: glow.opacity(progress > 0 ? s.glow : 0), radius: radius)
+    }
+}
+
+/// The glowing streak under a word for the comet effect: a trail up to the head, which burns white.
+struct CometTrail: View {
+    let progress: Double
+    let fade: Double
+    let gap: Double
+    let color: Color
+    let size: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let head = (geo.size.width + gap) * progress
+            let thick = max(2, size * 0.045)
+            ZStack(alignment: .leading) {
+                Capsule().fill(color.opacity(0.85))
+                    .frame(width: max(head, thick), height: thick)
+                    .opacity(progress < 1 ? 1 : fade)
+                Capsule().fill(LinearGradient(colors: [.clear, .white], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: min(head, size * 1.2), height: thick)
+                    .offset(x: max(head - size * 1.2, 0))
+                    .opacity(progress < 1 ? 1 : 0)
+                Circle().fill(Color.white)
+                    .frame(width: thick * 2.6, height: thick * 2.6)
+                    .shadow(color: .white, radius: thick * 2)
+                    .shadow(color: color, radius: size * 0.3)
+                    .offset(x: head - thick * 1.3)
+                    .opacity(progress < 1 ? 1 : 0)
+            }
+            .frame(width: geo.size.width, height: geo.size.height + thick * 2, alignment: .bottomLeading)
+            .shadow(color: color, radius: thick * 2)
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -189,7 +357,7 @@ struct LineView: View {
             } else {
                 FlowLayout(alignment: s.alignment, spacing: size * 0.28, lineSpacing: size * 0.12) {
                     ForEach(Array(line.words.enumerated()), id: \.offset) { i, word in
-                        WordView(word: word, index: i, time: time, active: isCurrent)
+                        WordView(word: word, index: i, time: time, active: isCurrent, line: line.id)
                     }
                 }
             }
@@ -253,6 +421,7 @@ private func lineTransition(_ name: String) -> AnyTransition {
 
 struct LyricsView: View {
     let time: Double
+    @Environment(\.isStage) private var isStage
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
@@ -263,9 +432,10 @@ struct LyricsView: View {
         VStack(alignment: s.horizontal, spacing: s.lineSpacing) {
             ForEach(visible(lines, index: index, shown: s.linesShown)) { line in
                 LineView(line: line, time: time, isCurrent: line.id == index)
-                    .transition(lineTransition(s.transition))
+                    .transition(lineTransition(s.transition(line: line.id)))
             }
         }
+        .modifier(LyricsBacking(kind: isStage ? s.lyricsBacking : "none", size: s.stageFontSize * 0.5))
         .frame(maxWidth: .infinity, alignment: s.frameAlignment)
         .animation(.spring(response: 0.55, dampingFraction: 1 - s.bounce * 0.55), value: index)
     }
@@ -284,6 +454,7 @@ struct LyricsView: View {
 
 struct StageBackground: View {
     let date: Date
+    let time: Double
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
@@ -296,6 +467,8 @@ struct StageBackground: View {
             switch s.stageBackground {
             case "aurora":
                 AuroraBackground(date: date)
+            case let name where StyleValues.wallpapers.contains(name):
+                WallpaperBackground(date: date, time: time)
             case "gradient":
                 // Slowly rotating two-colour gradient.
                 let angle = date.timeIntervalSinceReferenceDate * 0.15
@@ -322,7 +495,7 @@ struct EdgeGlow: View {
 
     var body: some View {
         let colors = player.palette.map { Color(nsColor: $0) }
-        let pulse = player.wordPulse(at: time)
+        let pulse = player.kick(at: time, date: date)
         // Soft edges come from gradient fades rather than a blur, which is far cheaper per frame.
         Rectangle()
             .fill(AngularGradient(colors: colors + colors + [colors[0]], center: .center,
@@ -383,9 +556,10 @@ struct StageView: View {
         let s = style.v
         let visible = player.stageVisible(s)
         TimelineView(.animation(paused: !visible)) { context in
-            let time = player.position(at: context.date) + s.offset
+            let time = player.lyricTime(at: context.date)
             ZStack {
-                StageBackground(date: context.date)
+                StageBackground(date: context.date, time: time)
+                StageEffects(date: context.date, time: time)
                 if s.edgeGlow { EdgeGlow(time: time, date: context.date) }
                 VStack(alignment: s.horizontal, spacing: 0) {
                     if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity) }
@@ -410,6 +584,7 @@ struct StageView: View {
             }
         }
         .environment(\.isStage, true)
+        .onChange(of: visible && s.audioReactive, initial: true) { _, on in AudioPulse.shared.setRunning(on) }
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.6), value: visible)
     }
@@ -472,7 +647,7 @@ struct OverlayView: View {
                         .font(.system(size: max(13, s.fontSize * 0.45), weight: .medium, design: .rounded))
                         .foregroundStyle(Color.white.opacity(0.5))
                 } else {
-                    LyricsView(time: player.position(at: context.date) + s.offset)
+                    LyricsView(time: player.lyricTime(at: context.date))
                 }
             }
             .padding(.horizontal, 30)

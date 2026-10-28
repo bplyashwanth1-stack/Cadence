@@ -85,6 +85,39 @@ enum Backdrop {
         guard let output = context.createCGImage(blurred, from: small.extent) else { return nil }
         return NSImage(cgImage: output, size: NSSize(width: output.width, height: output.height))
     }
+
+    /// Sharp artwork capped at 1200 px with a little extra saturation, for the wallpaper backgrounds.
+    static func wallpaper(_ image: NSImage) -> NSImage? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var input = CIImage(cgImage: cg)
+        let scale = min(1, 1200 / max(input.extent.width, input.extent.height))
+        input = input.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let output = input.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1.15])
+        return render(output, extent: input.extent)
+    }
+
+    /// The artwork's light and shade remapped onto a dark and a bright album colour.
+    static func duotone(_ image: NSImage, palette: [NSColor]) -> NSImage? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var input = CIImage(cgImage: cg)
+        let scale = min(1, 1200 / max(input.extent.width, input.extent.height))
+        input = input.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        func ci(_ color: NSColor) -> CIColor {
+            let c = color.usingColorSpace(.sRGB) ?? color
+            return CIColor(red: c.redComponent, green: c.greenComponent, blue: c.blueComponent)
+        }
+        let dark = palette[0].blended(withFraction: 0.82, of: .black) ?? palette[0]
+        let light = palette[palette.count > 1 ? 1 : 0].blended(withFraction: 0.2, of: .white) ?? palette[0]
+        let output = input
+            .applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.25])
+            .applyingFilter("CIFalseColor", parameters: ["inputColor0": ci(dark), "inputColor1": ci(light)])
+        return render(output, extent: input.extent)
+    }
+
+    private static func render(_ image: CIImage, extent: CGRect) -> NSImage? {
+        guard let output = context.createCGImage(image, from: extent) else { return nil }
+        return NSImage(cgImage: output, size: NSSize(width: output.width, height: output.height))
+    }
 }
 
 /// Fine monochrome noise, generated once and tiled.

@@ -216,12 +216,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Show on Desktop", #selector(toggleDesktop)))
         menu.addItem(item("Preview Lock Screen (10s)", #selector(previewStage)))
         menu.addItem(.separator())
+        menu.addItem(choiceMenu("Lyric Animation", [("mix", "Mix — changes every line")] + StyleValues.wordEffects,
+                                #selector(pickWordStyle(_:))))
+        menu.addItem(choiceMenu("Background", [
+            ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("cover", "Floating cover"),
+            ("disc", "Disc"), ("duotone", "Duotone"), ("vinyl", "Vinyl"), ("kaleido", "Kaleidoscope"),
+            ("aurora", "Aurora"), ("black", "Black"),
+        ], #selector(pickBackground(_:))))
+        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines")], #selector(pickLayout(_:))))
+        menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Search Lyrics Again", #selector(reloadLyrics)))
         menu.addItem(item("Launch at Login", #selector(toggleLogin)))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Cadence", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    /// A submenu of options; the tag lives in representedObject and the current one gets a checkmark on open.
+    private func choiceMenu(_ title: String, _ options: [(String, String)], _ action: Selector) -> NSMenuItem {
+        let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.delegate = self
+        for (tag, label) in options {
+            let option = item(label, action)
+            option.representedObject = tag
+            submenu.addItem(option)
+        }
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func pickWordStyle(_ sender: NSMenuItem) {
+        style.v.wordStyle = sender.representedObject as? String ?? "mix"
+        // In the word stack, effects only show when it isn't using the highlighter box.
+        style.v.stackStyle = "effect"
+    }
+
+    @objc private func pickBackground(_ sender: NSMenuItem) {
+        style.v.stageBackground = sender.representedObject as? String ?? "auto"
+    }
+
+    @objc private func pickLayout(_ sender: NSMenuItem) {
+        style.v.stageLayout = sender.representedObject as? String ?? "stack"
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
@@ -236,8 +273,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "Show on Desktop": style.v.showOnDesktop,
             "Launch at Login": SMAppService.mainApp.status == .enabled,
         ]
+        let chosen: [Selector: String] = [
+            #selector(pickWordStyle(_:)): style.v.wordStyle,
+            #selector(pickBackground(_:)): style.v.stageBackground,
+            #selector(pickLayout(_:)): style.v.stageLayout,
+        ]
         for item in menu.items {
             if let on = states[item.title] { item.state = on ? .on : .off }
+            if let action = item.action, let current = chosen[action] {
+                item.state = item.representedObject as? String == current ? .on : .off
+            }
         }
     }
 

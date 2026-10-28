@@ -2,23 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Cadence</string>
-    <key>CFBundleIdentifier</key>
-    <string>local.cadence.lyrics</string>
-    <key>CFBundleExecutable</key>
-    <string>Cadence</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Cadence reads what's playing in Spotify or Apple Music to show synced lyrics.</string>
+	<key>CFBundleExecutable</key>
+	<string>Cadence</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.cadence.lyrics</string>
+	<key>CFBundleName</key>
+	<string>Cadence</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Cadence reads what's playing in Spotify or Apple Music to show synced lyrics.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Cadence listens to the music playing so the lock-screen visuals move with the beat. Audio is analysed on this Mac and never recorded or sent anywhere.</string>
 </dict>
 </plist>

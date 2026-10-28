@@ -23,8 +23,8 @@ struct StyleValues: Codable, Equatable {
     var glow = 0.5
 
     // Animation
-    var wordStyle = "reveal"  // fill, reveal, bounce, typewriter, bloom, wave, pop, fade
-    var transition = "zoom"  // slide, zoom, flip, push, drop, blur, scale, fade
+    var wordStyle = "mix"  // mix, or one of StyleValues.wordEffects
+    var transition = "mix"  // mix, zoom, flip, slide, push, drop, blur, scale, fade
     var bounce = 0.35
     var blurInactive = true
     var linesShown = 3
@@ -35,8 +35,16 @@ struct StyleValues: Codable, Equatable {
     var stageFontSize = 150.0
     var stageIcons = true
     var stageDrift = true
-    var stageBackground = "aurora"  // aurora, album, gradient, custom, black
+    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, aurora, album, gradient, custom, black
+    var audioReactive = true
     var backgroundDarkness = 0.55
+    var motion = 0.6
+    var beatZoom = true
+    var rgbSplit = false
+    var particles = "none"  // none, bokeh, stars, embers, dust
+    var lightLeaks = false
+    var lyricsBacking = "none"  // none, shade, glass, band
+    var stackStyle = "effect"  // effect (the chosen word effect), box (highlighter)
     var stageHex = "#14141A"
     var edgeGlow = true
     var stageFooter = true
@@ -63,10 +71,14 @@ final class Style: ObservableObject {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(v), forKey: "style") }
     }
 
+    /// Saved settings are laid over the defaults, so settings added in a newer build don't wipe the rest.
     private init() {
         if let data = UserDefaults.standard.data(forKey: "style"),
-           let saved = try? JSONDecoder().decode(StyleValues.self, from: data) {
-            v = saved
+           let saved = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let defaults = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(StyleValues())) as? [String: Any],
+           let merged = try? JSONSerialization.data(withJSONObject: defaults.merging(saved) { $1 }),
+           let values = try? JSONDecoder().decode(StyleValues.self, from: merged) {
+            v = values
         } else {
             v = StyleValues()
         }
@@ -74,6 +86,47 @@ final class Style: ObservableObject {
 }
 
 extension StyleValues {
+    /// Backgrounds made from the artwork itself (see Wallpaper.swift).
+    /// Every word effect, as (tag, label) — shared by Settings and the menu bar.
+    static let wordEffects: [(String, String)] = [
+        ("comet", "Comet — a comet streaks through the words"),
+        ("neon", "Neon — flickers on and glows"),
+        ("glitch", "Glitch — RGB-split jitter"),
+        ("slam", "Slam — words hit with a shake"),
+        ("scramble", "Scramble — letters decode"),
+        ("cascade", "Cascade — letters drop in"),
+        ("flip", "Flip — words flip up"),
+        ("highlight", "Highlighter — marker swipes behind"),
+        ("shine", "Shine — fill, then a sheen"),
+        ("reveal", "Reveal — words rise in as sung"),
+        ("bounce", "Bounce — words spring in"),
+        ("bloom", "Bloom — words flash in and settle"),
+        ("typewriter", "Typewriter — letter by letter"),
+        ("fill", "Karaoke fill — colour sweeps through"),
+        ("wave", "Wave — karaoke fill that floats"),
+        ("pop", "Pop — words hop when sung"),
+        ("fade", "Fade — words brighten"),
+    ]
+
+    /// What Mix rotates through, line by line: smooth ones for verses, hard-hitting ones for the chorus.
+    private static let verseMix = ["reveal", "comet", "cascade", "highlight", "flip", "scramble", "shine", "bloom"]
+    private static let chorusMix = ["slam", "neon", "glitch", "bounce"]
+    private static let transitionMix = ["zoom", "flip", "slide", "push", "drop", "blur"]
+
+    /// The word effect for a given lyric line, resolving Mix.
+    func wordStyle(line: Int, chorus: Bool) -> String {
+        guard wordStyle == "mix" else { return wordStyle }
+        let pool = chorus ? Self.chorusMix : Self.verseMix
+        return pool[Int(noise(line, 31) * Double(pool.count))]
+    }
+
+    func transition(line: Int) -> String {
+        guard transition == "mix" else { return transition }
+        return Self.transitionMix[Int(noise(line, 32) * Double(Self.transitionMix.count))]
+    }
+
+    static let wallpapers: Set<String> = ["auto", "motion", "cover", "disc", "duotone", "vinyl", "kaleido"]
+
     static func weight(_ name: String) -> Font.Weight {
         switch name {
         case "light": return .light
@@ -118,9 +171,10 @@ extension StyleValues {
     }
 
     /// On a full-screen album-coloured background the album gradient would vanish, so use white there.
-    private func usesWhite(onStage: Bool) -> Bool {
+    func usesWhite(onStage: Bool) -> Bool {
         colorMode == "white"
-            || (onStage && colorMode == "album" && ["aurora", "album", "gradient"].contains(stageBackground))
+            || (onStage && colorMode == "album"
+                && (["aurora", "album", "gradient"].contains(stageBackground) || Self.wallpapers.contains(stageBackground)))
     }
 
     func highlight(_ palette: [NSColor], onStage: Bool) -> AnyShapeStyle {

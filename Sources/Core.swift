@@ -35,6 +35,7 @@ struct PlayerState {
     let track: Track
     let playing: Bool
     let position: Double
+    let measuredAt: Date  // midpoint of the AppleScript call, when `position` was most likely read
 }
 
 enum Player {
@@ -120,7 +121,10 @@ enum Player {
 
     private static func read(_ script: NSAppleScript, isSpotify: Bool) -> PlayerState? {
         var error: NSDictionary?
+        let before = Date()
         let result = script.executeAndReturnError(&error)
+        // The call takes 10–50 ms; stamping the reading with the time it returned made lyrics run that much late.
+        let measuredAt = before.addingTimeInterval(Date().timeIntervalSince(before) / 2)
         if let error, lastError != error.description {
             lastError = error.description
             Log.write("AppleScript error: \(error)")
@@ -132,7 +136,7 @@ enum Player {
         let duration = isSpotify ? number(f[5]) / 1000 : number(f[5])
         let track = Track(id: (isSpotify ? "spotify:" : "music:") + f[1], title: f[2], artist: f[3], album: f[4],
                           duration: duration, artworkURL: isSpotify && f.count > 7 ? URL(string: f[7]) : nil)
-        return PlayerState(track: track, playing: f[0] == "playing", position: number(f[6]))
+        return PlayerState(track: track, playing: f[0] == "playing", position: number(f[6]), measuredAt: measuredAt)
     }
 }
 
@@ -162,22 +166,45 @@ enum LRCLib {
         let duration: Double?
     }
 
+    /// LRCLIB entries are user-submitted and some are badly timed — the exact match for "Night Changes" runs
+    /// 5 s ahead of the ~20 other uploads. So gather every close match and take the one whose timing agrees
+    /// with the rest, instead of trusting the first hit.
     static func lyrics(for track: Track) async -> String? {
-        let exact = await request("get", [
+        async let exactData = request("get", [
             "track_name": track.title, "artist_name": track.artist,
             "album_name": track.album, "duration": String(Int(track.duration.rounded())),
         ])
-        if let data = exact, let item = try? JSONDecoder().decode(Item.self, from: data),
-           let synced = item.syncedLyrics, !synced.isEmpty {
-            return synced
+        // Search with "- Remastered", "(feat. …)" etc. stripped.
+        async let searchData = request("search", ["track_name": clean(track.title), "artist_name": track.artist])
+        var items: [Item] = []
+        if let data = await exactData, let item = try? JSONDecoder().decode(Item.self, from: data) { items.append(item) }
+        if let data = await searchData, let found = try? JSONDecoder().decode([Item].self, from: data) { items += found }
+
+        // A version more than a few seconds longer or shorter (radio edit, live, extended) has shifted
+        // timestamps, which is worse than no lyrics.
+        let candidates = items.compactMap { item -> (lrc: String, starts: [Double])? in
+            guard let lrc = item.syncedLyrics, !lrc.isEmpty,
+                  abs((item.duration ?? track.duration) - track.duration) <= 4 else { return nil }
+            let starts = LRC.parse(lrc).filter { !$0.words.isEmpty }.map(\.start)
+            return starts.isEmpty ? nil : (lrc, starts)
         }
-        // Fall back to a fuzzy search with "- Remastered", "(feat. …)" etc. stripped.
-        guard let data = await request("search", ["track_name": clean(track.title), "artist_name": track.artist]),
-              let items = try? JSONDecoder().decode([Item].self, from: data) else { return nil }
-        return items
-            .filter { $0.syncedLyrics?.isEmpty == false }
-            .min { abs(($0.duration ?? 0) - track.duration) < abs(($1.duration ?? 0) - track.duration) }?
-            .syncedLyrics
+        guard !candidates.isEmpty else { return nil }
+
+        // How far apart two uploads are timed: median gap between their sung lines, paired in order.
+        func distance(_ a: [Double], _ b: [Double]) -> Double {
+            let gaps = zip(a, b).map { abs($0 - $1) }.sorted()
+            return gaps.isEmpty ? .infinity : gaps[gaps.count / 2]
+        }
+        let disagreement = candidates.map { c in candidates.map { distance(c.starts, $0.starts) }.reduce(0, +) }
+        let best = disagreement.indices.min { disagreement[$0] < disagreement[$1] }!
+
+        // An upload with real per-word timing wins if it agrees with the consensus.
+        if let wordTimed = candidates.first(where: {
+            $0.lrc.contains("<") && $0.lrc.contains(">") && distance($0.starts, candidates[best].starts) < 0.4
+        }) {
+            return wordTimed.lrc
+        }
+        return candidates[best].lrc
     }
 
     private static func clean(_ title: String) -> String {
@@ -243,11 +270,12 @@ enum LRC {
             return result
         }
 
-        // Line-level LRC: spread the sung part of the line across words, weighted by length.
+        // Line-level LRC: spread the sung part of the line across words, weighted by syllables —
+        // singing time follows syllables, so letter counts made long words like "through" lag behind.
         let tokens = text.split(separator: " ").map(String.init)
         guard !tokens.isEmpty else { return [] }
         let span = min((end - start) * 0.92, Double(tokens.count) * 0.5 + 0.8)
-        let weights = tokens.map { Double($0.count) + 1.5 }
+        let weights = tokens.map { syllables($0) + 0.6 }
         let total = weights.reduce(0, +)
         var cursor = start
         return zip(tokens, weights).map { token, weight in
@@ -255,6 +283,22 @@ enum LRC {
             defer { cursor += duration }
             return Word(text: token, start: cursor, end: cursor + duration)
         }
+    }
+
+    /// Rough syllable count: vowel groups for Latin text, a letter-based guess for other scripts.
+    private static func syllables(_ word: String) -> Double {
+        let letters = word.lowercased().filter(\.isLetter)
+        guard !letters.isEmpty else { return 0.5 }
+        guard letters.allSatisfy(\.isASCII) else { return max(1, Double(letters.count) / 2.5) }
+        var groups = 0
+        var previousVowel = false
+        for c in letters {
+            let vowel = "aeiouy".contains(c)
+            if vowel && !previousVowel { groups += 1 }
+            previousVowel = vowel
+        }
+        if letters.hasSuffix("e") && !letters.hasSuffix("le") && groups > 1 { groups -= 1 }  // silent e
+        return Double(max(groups, 1))
     }
 }
 
@@ -330,14 +374,26 @@ final class NowPlaying: ObservableObject {
     @Published private(set) var active = false
     private var inactiveTimer: DispatchWorkItem?
     @Published private(set) var lyrics: [LyricLine] = [] {
-        didSet { words = lyrics.flatMap(\.words) }
+        didSet {
+            words = lyrics.flatMap(\.words)
+            wordLines = lyrics.flatMap { line in line.words.map { _ in line.id } }
+            let keys = lyrics.map { $0.words.map(\.text).joined(separator: " ").lowercased().filter(\.isLetter) }
+            let counts = Dictionary(keys.filter { $0.count > 6 }.map { ($0, 1) }, uniquingKeysWith: +)
+            repeated = Set(keys.indices.filter { (counts[keys[$0]] ?? 0) > 1 })
+        }
     }
+    /// The lyric line each entry of `words` belongs to.
+    private(set) var wordLines: [Int] = []
+    /// Lines sung more than once — roughly the chorus, where the visuals push harder.
+    private(set) var repeated: Set<Int> = []
     /// Every word of the song in order, for the one-word-at-a-time stack.
     private(set) var words: [Word] = []
     @Published private(set) var status = ""
     @Published private(set) var palette = Palette.fallback
     @Published private(set) var artwork: NSImage?
     @Published private(set) var backdrop: NSImage?  // artwork, small and already blurred
+    @Published private(set) var wallpaper: NSImage?  // artwork, sharp and capped in size
+    @Published private(set) var duotone: NSImage?  // artwork printed in two album colours
     @Published var locked = false
     @Published var previewing = false  // shows the lock-screen view on the desktop briefly
 
@@ -348,6 +404,15 @@ final class NowPlaying: ObservableObject {
 
     func position(at date: Date) -> Double {
         isPlaying ? basePosition + date.timeIntervalSince(baseTime) : basePosition
+    }
+
+    /// Word changes are animated (springs, pop-ins of ~0.3 s), so a word drawn exactly at its timestamp only
+    /// lands visibly a beat late. Leading slightly makes the animation arrive with the voice.
+    private let visualLead = 0.12
+
+    /// The song time lyrics are drawn at: playback position plus the animation lead and the user's offset.
+    func lyricTime(at date: Date) -> Double {
+        position(at: date) + (isPlaying ? visualLead : 0) + Style.shared.v.offset
     }
 
     var duration: Double { track?.duration ?? 0 }
@@ -392,25 +457,30 @@ final class NowPlaying: ObservableObject {
         polling = true
         playerQueue.async {
             let state = Player.state()
-            let measured = Date()
             DispatchQueue.main.async {
                 self.polling = false
-                self.apply(state, measuredAt: measured)
+                self.apply(state)
             }
         }
     }
 
-    private func apply(_ state: PlayerState?, measuredAt measured: Date) {
+    private func apply(_ state: PlayerState?) {
         guard let state else {
             if isPlaying { isPlaying = false }
             return
         }
         if state.track.id != track?.id { trackChanged(state.track) }
-        // Only resync on real drift (seek, pause); small jitter would make words jump.
-        let drift = abs(position(at: measured) - state.position)
-        if state.playing != isPlaying || drift > 0.3 {
+        let measured = state.measuredAt
+        let drift = state.position - position(at: measured)
+        if state.playing != isPlaying || abs(drift) > 0.25 {
+            // Seek, pause or track change: jump straight to the player's position.
             basePosition = state.position
             baseTime = measured
+        } else if abs(drift) > 0.02 {
+            // Small drift used to be ignored up to 0.3 s, so lyrics could sit that far off for a whole song.
+            // Ease a third of the way towards the player each poll: converges in a few seconds, and a
+            // single noisy reading moves words by only a few milliseconds.
+            basePosition += drift / 3
         }
         if state.playing != isPlaying { isPlaying = state.playing }
     }
@@ -420,6 +490,12 @@ final class NowPlaying: ObservableObject {
         guard let line = lyrics.last(where: { $0.start <= time }),
               let word = line.words.last(where: { $0.start <= time }) else { return 0 }
         return exp(-(time - word.start) * 5)
+    }
+
+    /// What the visuals hit on: the real kick drum when Cadence can hear the music, else each sung word.
+    func kick(at time: Double, date: Date) -> Double {
+        if Style.shared.v.audioReactive, let kick = AudioPulse.shared.kick(at: date) { return kick }
+        return wordPulse(at: time)
     }
 
     func reloadLyrics() {
@@ -446,7 +522,7 @@ final class NowPlaying: ObservableObject {
             let lines = await LRCLib.lyrics(for: track).map(LRC.parse) ?? []
             await MainActor.run {
                 self.cache[track.id] = lines
-                Log.write("\(lines.count) lyric lines for \(track.title)")
+                Log.write("\(lines.count) lyric lines for \(track.title), first sung at \(lines.first { !$0.words.isEmpty }?.start ?? 0)s")
                 guard self.track?.id == track.id else { return }
                 self.lyrics = lines
                 self.status = lines.isEmpty ? "No synced lyrics for this song" : ""
@@ -472,11 +548,15 @@ final class NowPlaying: ObservableObject {
     private func apply(artwork image: NSImage, for track: Track) {
         let palette = Palette.colors(from: image)
         let backdrop = Backdrop.blurred(image)
+        let wallpaper = Backdrop.wallpaper(image)
+        let duotone = Backdrop.duotone(image, palette: palette)
         DispatchQueue.main.async {
             guard self.track?.id == track.id else { return }
             self.palette = palette
             self.artwork = image
             self.backdrop = backdrop
+            self.wallpaper = wallpaper
+            self.duotone = duotone
         }
     }
 }

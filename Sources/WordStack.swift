@@ -81,7 +81,7 @@ enum WordIcons {
 // MARK: - Word stack (one word at a time, Verci-style)
 
 /// Stable pseudo-random value in 0..<1 per word, so a word keeps its size and position while on screen.
-private func noise(_ index: Int, _ salt: Int) -> Double {
+func noise(_ index: Int, _ salt: Int) -> Double {
     var x = UInt64(truncatingIfNeeded: index &* 2_654_435_761 &+ salt &* 40_503 &+ 0x9E37)
     x ^= x >> 13
     x = x &* 0x5BD1_E995
@@ -135,7 +135,11 @@ struct StackWord: View {
     private func label(_ string: String, _ size: Double, _ s: StyleValues) -> some View {
         let text = Text(string).font(s.font(size: size)).tracking(s.tracking)
             .lineLimit(1).minimumScaleFactor(0.3)
-        if index == current {
+        if index == current && s.stackStyle == "effect" {
+            WordView(word: word, index: index, time: time, active: true, size: size, connects: false,
+                     line: index < player.wordLines.count ? player.wordLines[index] : 0)
+                .padding(size * 0.1)
+        } else if index == current {
             // Highlighter box sweeps across the word as it's sung, then the word pops slightly.
             let progress = word.progress(at: time)
             let appear = clamp01((time - word.start) / 0.3)
@@ -225,6 +229,8 @@ struct WordStackView: View {
                                     .combined(with: .offset(y: -s.stageFontSize * 0.4))))
                     }
                 }
+                .frame(minWidth: s.lyricsBacking == "none" ? 0 : s.stageFontSize * 4)
+                .modifier(LyricsBacking(kind: s.lyricsBacking, size: s.stageFontSize * 0.6))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
