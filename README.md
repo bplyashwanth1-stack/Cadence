@@ -38,7 +38,11 @@ Compiles `Sources/*.swift`, bundles the fonts, ad-hoc signs the app and installs
 `~/Applications/Cadence.app`.
 
 On first launch macOS asks to let Cadence control Spotify / Music — allow it, since that's how Cadence
-reads the current song and position. Rebuilding changes the ad-hoc signature, so macOS may ask again.
+reads the current song and position. Cadence also asks to listen to system audio, for the beat-reactive
+visuals and auto-fixed lyric timing.
+
+`build.sh` signs every build with a local self-signed certificate (created on first build by
+`scripts/signing-identity.sh`, in its own keychain), so macOS keeps these permissions across rebuilds.
 
 ## Using it
 
