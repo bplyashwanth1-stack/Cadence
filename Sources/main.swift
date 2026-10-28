@@ -21,9 +21,16 @@ final class StageWindow: NSWindow {
         canBecomeVisibleWithoutLogin = true
         level = overlayLevel
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-        let hosting = NSHostingView(rootView: StageView())
-        hosting.sizingOptions = []
-        contentView = hosting
+        // Separate layers so the slow background doesn't redraw at the lyrics' frame rate (see StageBackdrop).
+        let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        for root in [AnyView(StageBackdrop()), AnyView(StageView()), AnyView(StageDepth())] {
+            let hosting = NSHostingView(rootView: root)
+            hosting.sizingOptions = []
+            hosting.frame = container.bounds
+            hosting.autoresizingMask = [.width, .height]
+            container.addSubview(hosting)
+        }
+        contentView = container
         orderFrontRegardless()
         LockScreen.attach(self)
     }

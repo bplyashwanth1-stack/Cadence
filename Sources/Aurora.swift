@@ -116,7 +116,7 @@ enum Backdrop {
     }
 
     /// Mask of the main subject (usually the artist) in the artwork, or nil when there's no clear one —
-    /// text-only covers, landscapes, or a "subject" that fills most of the picture.
+    /// text-only covers, landscapes, or a big portrait that would hide the lyrics and clock behind it.
     static func subjectMask(_ image: NSImage) -> CIImage? {
         guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let request = VNGenerateForegroundInstanceMaskRequest()
@@ -129,7 +129,7 @@ enum Backdrop {
         let area = mask.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: mask.extent)])
         context.render(area, toBitmap: &average, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                        format: .RGBAf, colorSpace: nil)
-        guard average[0] > 0.04, average[0] < 0.6 else { return nil }
+        guard average[0] > 0.04, average[0] < 0.3 else { return nil }
         // Soften the edge a touch so the cut doesn't look like a sticker.
         return mask.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.2])
             .cropped(to: mask.extent)
@@ -159,9 +159,8 @@ enum Grain {
         let noise = CIFilter(name: "CIRandomGenerator")!.outputImage!
             .cropped(to: CGRect(x: 0, y: 0, width: size, height: size))
         let mono = noise.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
-        let rep = NSCIImageRep(ciImage: mono)
-        let image = NSImage(size: NSSize(width: size, height: size))
-        image.addRepresentation(rep)
-        return image
+        // Rendered to a bitmap once; an NSCIImageRep would run the filter again on every frame.
+        guard let cg = CIContext().createCGImage(mono, from: mono.extent) else { return NSImage() }
+        return NSImage(cgImage: cg, size: NSSize(width: size, height: size))
     }()
 }

@@ -28,7 +28,6 @@ struct WallpaperBackground: View {
                     kenBurnsImage(intensified(s, direction.chorus), cutout, geo.size, t, pulse)
                         // Same shading the background gets from its darkening layer.
                         .colorMultiply(Color(white: 1 - (0.1 + s.backgroundDarkness * 0.65)))
-                        .shadow(color: .black.opacity(0.45), radius: 24)
                 }
                 .clipped()
                 .id(direction.scene)
@@ -102,7 +101,7 @@ struct WallpaperBackground: View {
     private func fill(_ art: NSImage, _ size: CGSize) -> some View {
         Image(nsImage: art)
             .resizable()
-            .interpolation(.high)
+            .interpolation(.medium)
             .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)
     }
@@ -119,7 +118,7 @@ struct WallpaperBackground: View {
     private func kenBurns(_ s: StyleValues, _ art: NSImage, _ size: CGSize, _ t: Double, _ pulse: Double) -> some View {
         let m = s.motion
         let image = kenBurnsImage(s, art, size, t, pulse)
-        if s.rgbSplit {
+        if s.rgbSplit && pulse > 0.12 {
             // Red, green and blue copies pulled apart on the beat and added back together.
             let split = (1.5 + 18 * pulse) * max(m, 0.3)
             ZStack {
@@ -154,14 +153,14 @@ struct WallpaperBackground: View {
         let shape = RoundedRectangle(cornerRadius: side * 0.035, style: .continuous)
         return ZStack {
             blurredFill(art, size, t)
+            SoftShadow(width: side * 1.3, height: side * 1.3).offset(y: 24)
             Image(nsImage: art)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(.medium)
                 .aspectRatio(1, contentMode: .fill)
                 .frame(width: side, height: side)
                 .clipShape(shape)
                 .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-                .shadow(color: .black.opacity(0.6), radius: 50, y: 24)
                 .scaleEffect(1 + 0.035 * m * pulse)
                 .rotation3DEffect(.degrees(sin(t * 0.4) * 12 * m), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
                 .rotation3DEffect(.degrees(cos(t * 0.31) * 8 * m), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
@@ -174,7 +173,7 @@ struct WallpaperBackground: View {
         let face = ZStack {
             Image(nsImage: art)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(.medium)
                 .aspectRatio(1, contentMode: .fill)
                 .frame(width: d, height: d)
             // Rainbow sheen of a CD's surface.
@@ -195,9 +194,9 @@ struct WallpaperBackground: View {
         return ZStack {
             blurredFill(art, size, t).scaleEffect(1 + 0.06 * pulse)
             SpectrumRing(diameter: d, t: t, pulse: pulse, palette: player.palette)
+            SoftShadow(width: d * 1.25, height: d * 1.25).offset(y: 16)
             face
                 .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.6), radius: 40, y: 16)
                 .scaleEffect(1 + 0.045 * pulse)
         }
     }
@@ -213,7 +212,7 @@ struct WallpaperBackground: View {
             }
             Image(nsImage: art)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(.medium)
                 .aspectRatio(1, contentMode: .fill)
                 .frame(width: d * 0.38, height: d * 0.38)
                 .clipShape(Circle())
@@ -229,9 +228,10 @@ struct WallpaperBackground: View {
         }
         return ZStack {
             blurredFill(art, size, t)
+            SoftShadow(width: d * 1.3, height: d * 1.3)
+                .position(x: size.width * 0.82 - 20, y: size.height * 0.55)
             record
                 .scaleEffect(1 + 0.02 * pulse)
-                .shadow(color: .black.opacity(0.7), radius: 60, x: -20)
                 .position(x: size.width * 0.82, y: size.height * 0.55)
         }
     }
@@ -243,7 +243,7 @@ struct WallpaperBackground: View {
         func piece(_ x: CGFloat, _ y: CGFloat) -> some View {
             Image(nsImage: art)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(.medium)
                 .aspectRatio(contentMode: .fill)
                 .frame(width: tile, height: tile)
                 .clipped()
@@ -289,11 +289,23 @@ struct SpectrumRing: View {
                 bar.addLine(to: CGPoint(x: center.x + dir.x * (inner + length), y: center.y + dir.y * (inner + length)))
                 let color = Color(nsColor: palette[half * palette.count / (count / 2 + 1)])
                     .opacity(0.55 + 0.45 * value)
+                ctx.stroke(bar, with: .color(color.opacity(0.18)), style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 ctx.stroke(bar, with: .color(color), style: StrokeStyle(lineWidth: 4, lineCap: .round))
             }
         }
-        .shadow(color: Color(nsColor: palette[0]).opacity(0.8), radius: 14)
         .allowsHitTesting(false)
+    }
+}
+
+/// A dark soft blob standing in for a drop shadow — a gradient costs nothing, a blur is redone every frame.
+struct SoftShadow: View {
+    let width: Double
+    let height: Double
+
+    var body: some View {
+        EllipticalGradient(colors: [.black.opacity(0.6), .black.opacity(0.3), .clear], center: .center,
+                           startRadiusFraction: 0.3, endRadiusFraction: 0.5)
+            .frame(width: width, height: height)
     }
 }
 

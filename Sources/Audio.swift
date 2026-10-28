@@ -64,7 +64,15 @@ final class AudioPulse {
         return max(exp(-since * 6), Double(s.bass) * 0.35)
     }
 
+    /// Starting the tap can block until the user answers the audio-capture prompt, so it never runs on the main
+    /// thread — that froze every animation while the prompt was up.
+    private let control = DispatchQueue(label: "cadence.audio.control")
+
     func setRunning(_ on: Bool) {
+        control.async { self.apply(on) }
+    }
+
+    private func apply(_ on: Bool) {
         if on && !running && !failed {
             if #available(macOS 14.2, *) {
                 do { try start() } catch {

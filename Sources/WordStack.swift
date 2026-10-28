@@ -69,7 +69,16 @@ enum WordIcons {
         return map
     }()
 
+    private static var cache: [String: String?] = [:]
+
     static func symbol(for word: String) -> String? {
+        if let hit = cache[word] { return hit }
+        let symbol = lookup(word)
+        cache[word] = symbol
+        return symbol
+    }
+
+    private static func lookup(_ word: String) -> String? {
         let key = word.lowercased()
             .replacingOccurrences(of: "’", with: "'")
             .trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.symbols).subtracting(["'"]))

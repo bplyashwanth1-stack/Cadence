@@ -83,6 +83,11 @@ private struct BurstCanvas: View {
     /// Symbols floating up from the bottom (hearts) or tumbling down from the top (money, snow).
     private func symbols(_ ctx: GraphicsContext, _ size: CGSize, _ name: String, _ colors: [Color], count: Int,
                          rising: Bool) {
+        let images = colors.map { color -> GraphicsContext.ResolvedImage in
+            var image = ctx.resolve(Image(systemName: name))
+            image.shading = .color(color)
+            return image
+        }
         for i in 0..<count {
             let local = age - r(i, 1) * 0.6
             guard local > 0 else { continue }
@@ -91,34 +96,33 @@ private struct BurstCanvas: View {
             let x = size.width * (0.05 + 0.9 * r(i, 3)) + sin(local * 2.5 + r(i, 4) * 6) * 36
             let y = rising ? size.height * 1.05 - travel : -40 + travel
             let side = 22 + r(i, 5) * 46
-            var image = ctx.resolve(Image(systemName: name))
-            image.shading = .color(colors[i % colors.count])
+            let image = images[i % images.count]
             var c = ctx
             c.opacity *= min(1, local / 0.2) * (0.6 + 0.4 * r(i, 6))
             c.translateBy(x: x, y: y)
             c.rotate(by: .degrees(sin(local * 2 + r(i, 7) * 6) * 25))
             c.scaleBy(x: min(1, local / 0.25), y: min(1, local / 0.25))
-            c.addFilter(.shadow(color: colors[0].opacity(0.7), radius: side * 0.3))
             c.draw(image, in: CGRect(x: -side / 2, y: -side / 2, width: side, height: side))
         }
     }
 
     /// Sparkles popping up all over the screen and twinkling.
     private func sparkles(_ ctx: GraphicsContext, _ size: CGSize) {
-        let gold = Color(red: 1, green: 0.88, blue: 0.55)
+        var white = ctx.resolve(Image(systemName: "sparkle"))
+        white.shading = .color(.white)
+        var gold = ctx.resolve(Image(systemName: "sparkle"))
+        gold.shading = .color(Color(red: 1, green: 0.88, blue: 0.55))
         for i in 0..<36 {
             let local = age - r(i, 1) * 0.9
             guard local > 0 else { continue }
             let pop = min(1, local / 0.3)
             let twinkle = 0.55 + 0.45 * sin(local * 9 + r(i, 2) * 10)
             let side = (18 + r(i, 3) * 40) * pop * (0.8 + 0.2 * twinkle)
-            var image = ctx.resolve(Image(systemName: "sparkle"))
-            image.shading = .color(i % 3 == 0 ? gold : .white)
+            let image = i % 3 == 0 ? gold : white
             var c = ctx
             c.opacity *= twinkle
             c.translateBy(x: size.width * r(i, 4), y: size.height * r(i, 5))
             c.rotate(by: .degrees(local * 40))
-            c.addFilter(.shadow(color: .white, radius: side * 0.4))
             c.draw(image, in: CGRect(x: -side / 2, y: -side / 2, width: side, height: side))
         }
     }
@@ -176,8 +180,8 @@ private struct BurstCanvas: View {
             point = CGPoint(x: point.x + (r(step, 2) - 0.5) * 140, y: point.y + 40 + r(step, 3) * 60)
             bolt.addLine(to: point)
         }
-        var c = ctx
-        c.addFilter(.shadow(color: Color(red: 0.6, green: 0.8, blue: 1), radius: 18))
-        c.stroke(bolt, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        ctx.stroke(bolt, with: .color(Color(red: 0.6, green: 0.8, blue: 1).opacity(0.3)),
+                   style: StrokeStyle(lineWidth: 22, lineCap: .round, lineJoin: .round))
+        ctx.stroke(bolt, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
     }
 }

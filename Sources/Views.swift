@@ -548,6 +548,56 @@ struct StageClock: View {
     }
 }
 
+/// The lock screen is three layers in their own windows' views — background, lyrics, and the cut-out artist on
+/// top — so the full-screen background, which moves slowly, redraws at 30 fps while the lyrics run at 60.
+/// Both outer layers snap to the same 30 fps clock so the cut-out stays exactly on its background.
+private func backdropDate(_ date: Date) -> Date {
+    Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * 30).rounded(.down) / 30)
+}
+
+struct StageBackdrop: View {
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var player = NowPlaying.shared
+
+    var body: some View {
+        let s = style.v
+        let visible = player.stageVisible(s)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { context in
+            let date = backdropDate(context.date)
+            let time = player.lyricTime(at: date)
+            ZStack {
+                StageBackground(date: date, time: time)
+                StageEffects(date: date, time: time)
+                if s.edgeGlow { EdgeGlow(time: time, date: date) }
+            }
+        }
+        .environment(\.isStage, true)
+        .onChange(of: visible && s.audioReactive, initial: true) { _, on in AudioPulse.shared.setRunning(on) }
+        .opacity(visible ? 1 : 0)
+        .animation(.easeInOut(duration: 0.6), value: visible)
+    }
+}
+
+/// The artist cut out of the artwork, drawn above the lyrics.
+struct StageDepth: View {
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var player = NowPlaying.shared
+
+    var body: some View {
+        let s = style.v
+        let visible = player.stageVisible(s) && s.depth && StyleValues.wallpapers.contains(s.stageBackground)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !visible)) { context in
+            let date = backdropDate(context.date)
+            if visible {
+                WallpaperBackground(date: date, time: player.lyricTime(at: date), foreground: true)
+            }
+        }
+        .allowsHitTesting(false)
+        .opacity(visible ? 1 : 0)
+        .animation(.easeInOut(duration: 0.6), value: visible)
+    }
+}
+
 struct StageView: View {
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
@@ -555,12 +605,10 @@ struct StageView: View {
     var body: some View {
         let s = style.v
         let visible = player.stageVisible(s)
-        TimelineView(.animation(paused: !visible)) { context in
+        // 60 fps: at ProMotion's 120 the lyrics cost twice as much for no visible gain.
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !visible)) { context in
             let time = player.lyricTime(at: context.date)
             ZStack {
-                StageBackground(date: context.date, time: time)
-                StageEffects(date: context.date, time: time)
-                if s.edgeGlow { EdgeGlow(time: time, date: context.date) }
                 VStack(alignment: s.horizontal, spacing: 0) {
                     if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity) }
                     Spacer(minLength: 0)
@@ -581,14 +629,9 @@ struct StageView: View {
                 .padding(.horizontal, 90)
                 .padding(.top, 44)
                 .padding(.bottom, 40)
-                if s.depth && StyleValues.wallpapers.contains(s.stageBackground) {
-                    WallpaperBackground(date: context.date, time: time, foreground: true)
-                        .allowsHitTesting(false)
-                }
             }
         }
         .environment(\.isStage, true)
-        .onChange(of: visible && s.audioReactive, initial: true) { _, on in AudioPulse.shared.setRunning(on) }
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.6), value: visible)
     }
