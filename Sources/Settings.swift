@@ -49,6 +49,10 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Presets") {
+                PresetPicker()
+            }
+
             lockScreen
             font
             text
@@ -139,6 +143,7 @@ struct SettingsView: View {
             slider("Lyrics size", $style.v.stageFontSize, 60...300) { String(format: "%.0f pt", $0) }
             Toggle("Edge glow (pulses with the vocals)", isOn: $style.v.edgeGlow)
             Toggle("Clock", isOn: $style.v.stageClock)
+            Toggle("Title card when a song starts", isOn: $style.v.titleCard)
             Toggle("Now-playing bar (hover for controls)", isOn: $style.v.stageFooter)
             Toggle("Keep screen awake while playing", isOn: $style.v.keepAwake)
             Button("Preview for 10 seconds", action: preview)

@@ -387,6 +387,8 @@ final class NowPlaying: ObservableObject {
     }
     /// Sung words that set off a keyword burst, in order.
     private(set) var bursts: [(index: Int, start: Double, kind: Burst)] = []
+    /// When the current song was first seen, and how far into it it was — the title card plays from here.
+    private(set) var trackStart = (date: Date.distantPast, position: 0.0)
     /// The lyric line each entry of `words` belongs to.
     private(set) var wordLines: [Int] = []
     /// Lines sung more than once — roughly the chorus, where the visuals push harder.
@@ -476,7 +478,10 @@ final class NowPlaying: ObservableObject {
             if isPlaying { isPlaying = false }
             return
         }
-        if state.track.id != track?.id { trackChanged(state.track) }
+        if state.track.id != track?.id {
+            trackChanged(state.track)
+            trackStart = (state.measuredAt, state.position)
+        }
         let measured = state.measuredAt
         let drift = state.position - position(at: measured)
         if state.playing != isPlaying || abs(drift) > 0.25 {

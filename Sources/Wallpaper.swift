@@ -18,7 +18,7 @@ struct WallpaperBackground: View {
         let s = style.v
         let t = date.timeIntervalSinceReferenceDate
         let kick = s.beatZoom ? player.kick(at: time, date: date) : 0
-        let direction = direct(s.stageBackground, time)
+        let direction = direct(s.stageBackground, time, date)
         // Each new line punches in a little; a scene cut punches in hard.
         let pulse = min(1.4, kick + 0.35 * direction.line + direction.cut)
         if foreground {
@@ -62,18 +62,17 @@ struct WallpaperBackground: View {
 
     private static let autoScenes = ["motion", "cover", "disc", "kaleido", "duotone", "vinyl"]
 
-    /// Which scene to show and how hard to hit. Auto changes scene every four lines and goes harder on the chorus.
-    private func direct(_ chosen: String, _ time: Double) -> (scene: String, line: Double, cut: Double, chorus: Bool) {
+    /// Which scene to show and how hard to hit. Auto lets the SceneDirector cut on the beat; the chorus goes harder.
+    private func direct(_ chosen: String, _ time: Double, _ date: Date)
+        -> (scene: String, line: Double, cut: Double, chorus: Bool) {
         let lines = player.lyrics
-        guard let index = lines.lastIndex(where: { $0.start <= time }) else {
-            return (chosen == "auto" ? "motion" : chosen, 0, 0, false)
-        }
-        let line = exp(-(time - lines[index].start) * 5)
-        let chorus = player.repeated.contains(index)
+        let index = lines.lastIndex(where: { $0.start <= time })
+        let line = index.map { exp(-(time - lines[$0].start) * 5) } ?? 0
+        let chorus = index.map(player.repeated.contains) ?? false
         guard chosen == "auto" else { return (chosen, line, 0, chorus) }
-        let section = index / 4
-        let cut = section > 0 ? exp(-(time - lines[section * 4].start) * 4) : 0
-        return (Self.autoScenes[section % Self.autoScenes.count], line, cut, chorus)
+        let director = SceneDirector.shared
+        director.update(date: date, section: (index ?? 0) / 4, chorus: chorus)
+        return (Self.autoScenes[director.scene % Self.autoScenes.count], line, director.flash(at: date), chorus)
     }
 
     /// The chorus gets more motion and the RGB split.

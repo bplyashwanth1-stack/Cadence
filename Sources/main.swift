@@ -223,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Show on Desktop", #selector(toggleDesktop)))
         menu.addItem(item("Preview Lock Screen (10s)", #selector(previewStage)))
         menu.addItem(.separator())
+        menu.addItem(presetsMenu())
         menu.addItem(choiceMenu("Lyric Animation", [("mix", "Mix — changes every line")] + StyleValues.wordEffects,
                                 #selector(pickWordStyle(_:))))
         menu.addItem(choiceMenu("Background", [
@@ -252,6 +253,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         parent.submenu = submenu
         return parent
+    }
+
+    /// Built-in presets, then the user's own, then saving the current look. Rebuilt on open so new saves show up.
+    private func presetsMenu() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Presets", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.delegate = self
+        parent.submenu = submenu
+        fillPresets(submenu)
+        return parent
+    }
+
+    private func fillPresets(_ submenu: NSMenu) {
+        submenu.removeAllItems()
+        for preset in Presets.builtIn {
+            let option = item(preset.name, #selector(pickPreset(_:)))
+            option.image = NSImage(systemSymbolName: preset.symbol, accessibilityDescription: nil)
+            option.toolTip = preset.blurb
+            option.representedObject = preset.values(keeping: style.v)
+            submenu.addItem(option)
+        }
+        let custom = PresetStore.shared.custom
+        if !custom.isEmpty { submenu.addItem(.separator()) }
+        for preset in custom {
+            let option = item(preset.name, #selector(pickPreset(_:)))
+            option.image = NSImage(systemSymbolName: "star.fill", accessibilityDescription: nil)
+            option.representedObject = preset.values(keeping: style.v)
+            submenu.addItem(option)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(item("Save Current Look as Preset…", #selector(savePreset)))
+    }
+
+    @objc private func pickPreset(_ sender: NSMenuItem) {
+        if let values = sender.representedObject as? StyleValues { style.v = values }
+    }
+
+    @objc private func savePreset() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Save current look as a preset"
+        alert.informativeText = "Background, lyric animation, font and effects are saved together."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "My Vibe"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        if alert.runModal() == .alertFirstButtonReturn {
+            PresetStore.shared.save(field.stringValue, style.v)
+        }
     }
 
     @objc private func pickWordStyle(_ sender: NSMenuItem) {
@@ -285,7 +337,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(pickBackground(_:)): style.v.stageBackground,
             #selector(pickLayout(_:)): style.v.stageLayout,
         ]
+        if menu.items.contains(where: { $0.action == #selector(savePreset) }) { fillPresets(menu) }
         for item in menu.items {
+            if item.action == #selector(pickPreset(_:)) {
+                item.state = (item.representedObject as? StyleValues) == style.v ? .on : .off
+            }
             if let on = states[item.title] { item.state = on ? .on : .off }
             if let action = item.action, let current = chosen[action] {
                 item.state = item.representedObject as? String == current ? .on : .off

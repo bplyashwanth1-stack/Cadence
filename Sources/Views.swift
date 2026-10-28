@@ -612,7 +612,9 @@ struct StageView: View {
                 VStack(alignment: s.horizontal, spacing: 0) {
                     if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity) }
                     Spacer(minLength: 0)
-                    if player.lyrics.isEmpty {
+                    if TitleCard.showing(player, at: context.date) {
+                        TitleCard(date: context.date, time: time)
+                    } else if player.lyrics.isEmpty {
                         Text(player.status)
                             .font(s.font(size: s.stageFontSize * 0.3))
                             .foregroundStyle(Color.white.opacity(0.6))
