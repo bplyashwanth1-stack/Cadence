@@ -124,6 +124,7 @@ struct SettingsView: View {
                 Text("Moonlit Lake — the cover over rippling water").tag("lake")
                 Text("Cinema — the cover on the big screen").tag("cinema")
                 Text("Retro Grid — the cover on a neon sunset").tag("retro")
+                ForEach(WorldScene.kinds, id: \.tag) { Text($0.name).tag($0.tag) }
                 Divider()
                 Text("Aurora — flowing album colors and artwork").tag("aurora")
                 Text("Album color").tag("album")
@@ -178,6 +179,10 @@ struct SettingsView: View {
                 Text("Soft shade").tag("shade")
                 Text("Glass card").tag("glass")
                 Text("Band").tag("band")
+                Text("Paper note").tag("paper")
+                Text("Terminal").tag("terminal")
+                Text("Chat bubble").tag("bubble")
+                Text("Road sign").tag("sign")
             }
             slider("Lyrics size", $style.v.stageFontSize, 60...300) { String(format: "%.0f pt", $0) }
             Toggle("Edge glow (pulses with the vocals)", isOn: $style.v.edgeGlow)

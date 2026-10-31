@@ -6,7 +6,7 @@ import SwiftUI
 /// Backgrounds that give the whole cover a place to live: pinned up, in a tape, over water, on a cinema screen or
 /// in front of a retro sunset. They move by themselves at a steady pace and never crop into the picture.
 
-private func wholeCover(_ art: NSImage, _ side: Double, corner: Double = 0) -> some View {
+func wholeCover(_ art: NSImage, _ side: Double, corner: Double = 0) -> some View {
     Image(nsImage: art)
         .resizable()
         .interpolation(.medium)

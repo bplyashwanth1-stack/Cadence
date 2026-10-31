@@ -35,7 +35,7 @@ struct StyleValues: Codable, Equatable {
     var stageFontSize = 150.0
     var stageIcons = true
     var stageDrift = true
-    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, polaroid, cassette, lake, cinema, retro, aurora, album, gradient, custom, black
+    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, polaroid, cassette, lake, cinema, retro, the WorldScene kinds, aurora, album, gradient, custom, black
     var audioReactive = true
     var depth = true  // the artist cut out of the artwork stands in front of the clock
     var depthOverLyrics = false  // …and in front of the lyrics too (can hide the word being sung)
@@ -53,7 +53,7 @@ struct StyleValues: Codable, Equatable {
     var lightLeaks = false
     var lightBeams = false  // stage spotlights sweeping from above
     var vhs = false  // scan lines and a rolling tracking band
-    var lyricsBacking = "none"  // none, shade, glass, band
+    var lyricsBacking = "none"  // none, shade, glass, band, paper, terminal, bubble, sign
     var stackStyle = "effect"  // effect (the chosen word effect), box (highlighter)
     var stageHex = "#14141A"
     var edgeGlow = true
@@ -152,7 +152,8 @@ extension StyleValues {
     }
 
     static let wallpapers: Set<String> = ["auto", "motion", "cover", "disc", "duotone", "vinyl", "kaleido",
-                                          "polaroid", "cassette", "lake", "cinema", "retro"]
+                                          "polaroid", "cassette", "lake", "cinema", "retro",
+                                          "gallery", "billboard", "crt", "galaxy", "ocean", "mountains", "highway", "neonwall", "aquarium", "forest", "coderain", "newspaper"]
 
     /// Backgrounds that no longer exist, for settings and saved presets from older builds.
     func withoutRetiredBackground() -> StyleValues {

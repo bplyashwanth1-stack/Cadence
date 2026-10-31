@@ -17,7 +17,8 @@ over a moving wallpaper made from the album art that hits on the beat.
 - **Hindi/Telugu in English letters**, spelled the way people type them ("premapichchi", not "premapicci").
 
 **Backgrounds**
-- **Album art, moving** — motion wallpaper, floating cover, duotone, spinning vinyl, kaleidoscope, polaroid, cassette, moonlit lake, cinema, retro grid, or a
+- **Album art, moving** — motion wallpaper, floating cover, duotone, spinning vinyl, kaleidoscope, polaroid, cassette, moonlit lake, cinema, retro grid, gallery, city billboard, old TV, deep space, ocean, mountains,
+  highway, neon wall, aquarium, forest, code rain, front page, or a
   spinning disc ringed by a live spectrum.
 - **Auto** cuts between them like an editor: on the drop, on new sections, every few beats in the chorus.
 - **Hears the music** (Core Audio process tap): zooms, flashes and particles kick on the real beat.
@@ -27,10 +28,10 @@ over a moving wallpaper made from the album art that hits on the beat.
 
 - **Reel lyrics** — poster type built word by word, with slams, rises, echoes, colour blocks and blackouts.
 
-**Presets** — twenty-seven looks in one click (Fan Edit, Cinema Cut, Poster Drop, Reel Edit, Night Drive, Hype, Chill,
+**Presets** — fifty-one looks in one click (Fan Edit, Cinema Cut, Poster Drop, Reel Edit, Night Drive, Hype, Chill,
 Love Letter, Glitchcore, Movie Subs, Galaxy, Highlighter, Sad Hours, Golden Hour, Y2K,
 Polaroid Days, Mixtape, Moonlit, Late Show, Synthwave, Snow Globe, Monsoon, Sakura, Festival, Bubblegum, Stadium,
-Ripple), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
+Ripple, and 24 more, from Art Gallery to Zen Garden), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
 Heart your favourites to put them first and keep the arrows among them, and pin a preset to a song or artist
 to have it come back whenever they play.
 
@@ -104,6 +105,7 @@ rebuilds.
 | `Sources/Wallpaper.swift` | Artwork backgrounds, spectrum ring, particles, light leaks, lyrics backing |
 | `Sources/ReelLyrics.swift` | Poster lyrics: layout and motion graphics |
 | `Sources/Stages.swift` | Staged covers (polaroid, cassette, lake, cinema, retro grid), stage beams, VHS look |
+| `Sources/Worlds.swift` | Twelve whole scenes for the cover, from gallery to front page |
 | `Sources/BeatClock.swift` | Counts beats so the background lights travel with the music |
 | `Sources/Bursts.swift` | Keyword bursts |
 | `Sources/Aurora.swift` | Aurora background; artwork processing (blur, duotone, subject cut-out); grain |

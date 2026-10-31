@@ -405,6 +405,337 @@ enum Presets {
             v.fontWeight = "semibold"
             v.stageFontSize = 115
         },
+        Preset(name: "Art Gallery", symbol: "photo.artframe", blurb: "Framed on a wall, light gliding past") { v in
+            v.stageBackground = "gallery"
+            v.wordStyle = "reveal"
+            v.transition = "fade"
+            v.fontFamily = "DM Serif Display"
+            v.fontWeight = "regular"
+            v.colorMode = "white"
+            v.lyricsBacking = "shade"
+            v.edgeGlow = false
+            v.stageFontSize = 110
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Times Square", symbol: "building.2.crop.circle", blurb: "City billboard, huge poster lyrics") { v in
+            v.stageBackground = "billboard"
+            v.fontFamily = "Bebas Neue"
+            v.fontWeight = "regular"
+            v.tracking = 3
+            v.motion = 0.7
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "reel"
+            v.keywordBursts = false
+            v.uppercase = true
+        },
+        Preset(name: "Channel 3", symbol: "tv", blurb: "Old tube TV, typed captions") { v in
+            v.stageBackground = "crt"
+            v.wordStyle = "typewriter"
+            v.transition = "slide"
+            v.vhs = true
+            v.lyricsBacking = "band"
+            v.fontFamily = "Righteous"
+            v.fontWeight = "regular"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 95
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 1
+        },
+        Preset(name: "Cosmos", symbol: "globe.europe.africa.fill", blurb: "Deep space, a moon in orbit") { v in
+            v.stageBackground = "galaxy"
+            v.wordStyle = "float"
+            v.transition = "zoom"
+            v.particles = "comets"
+            v.fontFamily = "Sora"
+            v.fontWeight = "semibold"
+            v.stageFontSize = 105
+            v.backgroundDarkness = 0.25
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Sunset Beach", symbol: "beach.umbrella.fill", blurb: "Rolling waves, soft script") { v in
+            v.stageBackground = "ocean"
+            v.wordStyle = "ripple"
+            v.transition = "fade"
+            v.fontFamily = "Pacifico"
+            v.fontWeight = "regular"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 110
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "High Peaks", symbol: "mountain.2.fill", blurb: "Ridges drifting, inked serif") { v in
+            v.stageBackground = "mountains"
+            v.wordStyle = "ink"
+            v.transition = "fade"
+            v.particles = "dust"
+            v.fontFamily = "Playfair Display"
+            v.fontWeight = "regular"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 115
+            v.backgroundDarkness = 0.22
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Open Road", symbol: "road.lanes", blurb: "Night highway, slamming poster type") { v in
+            v.stageBackground = "highway"
+            v.fontFamily = "Anton"
+            v.fontWeight = "regular"
+            v.motion = 0.8
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "reel"
+            v.keywordBursts = false
+            v.uppercase = true
+        },
+        Preset(name: "Neon Alley", symbol: "lightbulb.max.fill", blurb: "Neon on brick, rain coming down") { v in
+            v.stageBackground = "neonwall"
+            v.wordStyle = "neon"
+            v.transition = "fade"
+            v.particles = "rain"
+            v.fontFamily = "Monoton"
+            v.fontWeight = "regular"
+            v.uppercase = true
+            v.colorMode = "custom"
+            v.customHex = "#FF4FA3"
+            v.edgeGlow = false
+            v.stageFontSize = 95
+            v.backgroundDarkness = 0.35
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Deep Blue", symbol: "fish.fill", blurb: "Aquarium, fish and rising bubbles") { v in
+            v.stageBackground = "aquarium"
+            v.wordStyle = "wave"
+            v.transition = "fade"
+            v.fontFamily = "Poppins"
+            v.fontWeight = "bold"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 100
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Enchanted", symbol: "tree.fill", blurb: "Misty forest, fireflies, script") { v in
+            v.stageBackground = "forest"
+            v.wordStyle = "float"
+            v.transition = "fade"
+            v.particles = "fireflies"
+            v.fontFamily = "Lobster"
+            v.fontWeight = "regular"
+            v.colorMode = "custom"
+            v.customHex = "#D9FFC4"
+            v.edgeGlow = false
+            v.stageFontSize = 120
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Code Rain", symbol: "terminal.fill", blurb: "Falling code, words decrypt in a terminal") { v in
+            v.stageBackground = "coderain"
+            v.wordStyle = "scramble"
+            v.transition = "fade"
+            v.lyricsBacking = "terminal"
+            v.fontFamily = "System Mono"
+            v.fontWeight = "bold"
+            v.colorMode = "custom"
+            v.customHex = "#3DFF85"
+            v.edgeGlow = false
+            v.stageFontSize = 70
+            v.backgroundDarkness = 0.2
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Front Page", symbol: "newspaper.fill", blurb: "The song as the headline, a paper note") { v in
+            v.stageBackground = "newspaper"
+            v.wordStyle = "typewriter"
+            v.transition = "fade"
+            v.lyricsBacking = "paper"
+            v.fontFamily = "Abril Fatface"
+            v.fontWeight = "regular"
+            v.colorMode = "custom"
+            v.customHex = "#2A2320"
+            v.edgeGlow = false
+            v.stageFontSize = 75
+            v.backgroundDarkness = 0.1
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Love Note", symbol: "envelope.fill", blurb: "A handwritten note on the polaroid") { v in
+            v.stageBackground = "polaroid"
+            v.wordStyle = "ink"
+            v.transition = "fade"
+            v.lyricsBacking = "paper"
+            v.fontFamily = "Dancing Script"
+            v.fontWeight = "bold"
+            v.colorMode = "custom"
+            v.customHex = "#A0244E"
+            v.edgeGlow = false
+            v.stageFontSize = 80
+            v.backgroundDarkness = 0.45
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Text Thread", symbol: "message.fill", blurb: "Lyrics arrive as chat messages") { v in
+            v.stageBackground = "cover"
+            v.wordStyle = "pop"
+            v.transition = "slide"
+            v.lyricsBacking = "bubble"
+            v.fontFamily = "System Rounded"
+            v.fontWeight = "semibold"
+            v.colorMode = "custom"
+            v.customHex = "#1C7CFF"
+            v.edgeGlow = false
+            v.stageFontSize = 75
+            v.stageLayout = "lines"
+            v.linesShown = 1
+        },
+        Preset(name: "Exit Ahead", symbol: "signpost.right.fill", blurb: "Night highway, words on a road sign") { v in
+            v.stageBackground = "highway"
+            v.wordStyle = "reveal"
+            v.transition = "push"
+            v.lyricsBacking = "sign"
+            v.fontFamily = "Oswald"
+            v.fontWeight = "semibold"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 75
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "lines"
+            v.linesShown = 1
+        },
+        Preset(name: "Console", symbol: "chevron.left.forwardslash.chevron.right", blurb: "Black screen, green terminal") { v in
+            v.stageBackground = "black"
+            v.wordStyle = "typewriter"
+            v.transition = "fade"
+            v.lyricsBacking = "terminal"
+            v.fontFamily = "System Mono"
+            v.fontWeight = "regular"
+            v.colorMode = "custom"
+            v.customHex = "#3DFF85"
+            v.edgeGlow = false
+            v.stageFontSize = 70
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Comic Book", symbol: "bubble.left.and.exclamationmark.bubble.right.fill", blurb: "Duotone panel, stamped speech bubbles") { v in
+            v.stageBackground = "duotone"
+            v.wordStyle = "stamp"
+            v.transition = "zoom"
+            v.lyricsBacking = "bubble"
+            v.fontFamily = "Bungee"
+            v.fontWeight = "regular"
+            v.uppercase = true
+            v.colorMode = "custom"
+            v.customHex = "#111111"
+            v.edgeGlow = false
+            v.stageFontSize = 70
+            v.stageLayout = "lines"
+            v.linesShown = 1
+        },
+        Preset(name: "Night Museum", symbol: "building.columns.fill", blurb: "Dark gallery, dust in the light") { v in
+            v.stageBackground = "gallery"
+            v.wordStyle = "fade"
+            v.transition = "blur"
+            v.particles = "dust"
+            v.lightBeams = true
+            v.fontFamily = "Syne"
+            v.fontWeight = "bold"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 100
+            v.backgroundDarkness = 0.5
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Stargazer", symbol: "binoculars.fill", blurb: "Space with poster lyrics") { v in
+            v.stageBackground = "galaxy"
+            v.fontFamily = "Unbounded"
+            v.fontWeight = "bold"
+            v.motion = 0.7
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "reel"
+            v.keywordBursts = false
+            v.uppercase = true
+        },
+        Preset(name: "Winter Peaks", symbol: "snowflake.circle.fill", blurb: "Ridges under falling snow") { v in
+            v.stageBackground = "mountains"
+            v.wordStyle = "float"
+            v.transition = "fade"
+            v.particles = "snow"
+            v.fontFamily = "Manrope"
+            v.fontWeight = "bold"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.stageFontSize = 105
+            v.backgroundDarkness = 0.35
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Drive-In", symbol: "car.side.fill", blurb: "Cinema, big poster lyrics") { v in
+            v.stageBackground = "cinema"
+            v.fontFamily = "Oswald"
+            v.fontWeight = "bold"
+            v.colorMode = "white"
+            v.motion = 0.6
+            v.edgeGlow = false
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "reel"
+            v.keywordBursts = false
+            v.uppercase = true
+        },
+        Preset(name: "Arcade", symbol: "gamecontroller.fill", blurb: "Neon grid, jelly pixel type") { v in
+            v.stageBackground = "retro"
+            v.wordStyle = "jelly"
+            v.transition = "scale"
+            v.particles = "stars"
+            v.fontFamily = "Bungee"
+            v.fontWeight = "regular"
+            v.uppercase = true
+            v.colorMode = "custom"
+            v.customHex = "#FFE14D"
+            v.motion = 0.8
+            v.stageFontSize = 95
+            v.backgroundDarkness = 0.3
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Campfire", symbol: "flame.circle.fill", blurb: "Forest at night, rising embers") { v in
+            v.stageBackground = "forest"
+            v.wordStyle = "smoke"
+            v.transition = "fade"
+            v.particles = "embers"
+            v.fontFamily = "Caveat"
+            v.fontWeight = "bold"
+            v.colorMode = "custom"
+            v.customHex = "#FFC27A"
+            v.edgeGlow = false
+            v.stageFontSize = 125
+            v.backgroundDarkness = 0.45
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
+        Preset(name: "Zen Garden", symbol: "leaf.circle.fill", blurb: "Slow aurora, petals, quiet words") { v in
+            v.stageBackground = "aurora"
+            v.wordStyle = "fade"
+            v.transition = "fade"
+            v.particles = "petals"
+            v.fontFamily = "Manrope"
+            v.fontWeight = "medium"
+            v.colorMode = "white"
+            v.edgeGlow = false
+            v.motion = 0.2
+            v.stageFontSize = 95
+            v.stageLayout = "lines"
+            v.linesShown = 2
+        },
     ]
 }
 

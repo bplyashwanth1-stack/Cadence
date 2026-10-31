@@ -114,6 +114,9 @@ struct WallpaperBackground: View {
             }
         case "cinema": CinemaScene(art: art, size: size, t: t, palette: player.palette)
         case "retro": RetroGridScene(art: art, size: size, t: t, motion: s.motion, palette: player.palette)
+        case let kind where WorldScene.kinds.contains(where: { $0.tag == kind }):
+            WorldScene(kind: kind, art: art, title: player.track?.title ?? "", artist: player.track?.artist ?? "",
+                       size: size, t: t, motion: s.motion, palette: player.palette)
         default: kenBurns(s, art, size, t, pulse)
         }
     }
@@ -551,6 +554,51 @@ struct LyricsBacking: ViewModifier {
                                                     lineWidth: 1.5))
                         .shadow(color: .black.opacity(0.35), radius: size * 0.3, y: size * 0.1)
                 }
+        case "paper":
+            // A torn-off note, slightly crooked.
+            content
+                .padding(.horizontal, size * 0.55)
+                .padding(.vertical, size * 0.4)
+                .background {
+                    Rectangle().fill(Color(red: 0.97, green: 0.94, blue: 0.84))
+                        .overlay(alignment: .top) { Rectangle().fill(Color(red: 0.95, green: 0.8, blue: 0.5).opacity(0.75)).frame(width: size * 1.6, height: size * 0.3).offset(y: -size * 0.14) }
+                        .shadow(color: .black.opacity(0.5), radius: size * 0.25, y: size * 0.12)
+                        .rotationEffect(.degrees(-1.2))
+                }
+        case "terminal":
+            let shape = RoundedRectangle(cornerRadius: size * 0.12, style: .continuous)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: size * 0.1) {
+                    ForEach([Color.red, .yellow, .green], id: \.self) { Circle().fill($0).frame(width: size * 0.16, height: size * 0.16) }
+                }
+                .padding(size * 0.16)
+                content
+                    .padding(.horizontal, size * 0.5)
+                    .padding(.bottom, size * 0.4)
+            }
+            .background(shape.fill(Color.black.opacity(0.88)))
+            .overlay(shape.strokeBorder(Color(red: 0.2, green: 0.95, blue: 0.5).opacity(0.5), lineWidth: 1.5))
+        case "bubble":
+            // A chat message.
+            content
+                .padding(.horizontal, size * 0.6)
+                .padding(.vertical, size * 0.34)
+                .background {
+                    RoundedRectangle(cornerRadius: size * 0.55, style: .continuous).fill(Color.white)
+                        .overlay(alignment: .bottomLeading) {
+                            Circle().fill(Color.white).frame(width: size * 0.3, height: size * 0.3).offset(x: -size * 0.03, y: size * 0.04)
+                        }
+                        .shadow(color: .black.opacity(0.35), radius: size * 0.2, y: size * 0.08)
+                }
+        case "sign":
+            // A green road sign.
+            let shape = RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
+            content
+                .padding(.horizontal, size * 0.6)
+                .padding(.vertical, size * 0.36)
+                .background(shape.fill(Color(red: 0.02, green: 0.36, blue: 0.2)))
+                .overlay(shape.inset(by: size * 0.08).stroke(Color.white, lineWidth: 3))
+                .shadow(color: .black.opacity(0.5), radius: size * 0.2, y: size * 0.1)
         case "band":
             // Cinematic strip across the whole screen.
             content

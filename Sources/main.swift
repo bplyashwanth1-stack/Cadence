@@ -236,6 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("cover", "Floating cover"),
             ("disc", "Disc"), ("duotone", "Duotone"), ("vinyl", "Vinyl"), ("kaleido", "Kaleidoscope"),
             ("polaroid", "Polaroid"), ("cassette", "Cassette"), ("lake", "Moonlit Lake"), ("cinema", "Cinema"), ("retro", "Retro Grid"),
+        ] + WorldScene.kinds.map { ($0.tag, $0.name.components(separatedBy: " — ")[0]) } + [
             ("aurora", "Aurora"), ("black", "Black"),
         ], #selector(pickBackground(_:))))
         menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics")], #selector(pickLayout(_:))))
