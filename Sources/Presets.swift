@@ -31,6 +31,8 @@ extension StyleValues {
         v.titleCard = c.titleCard
         v.autoSync = c.autoSync
         v.lyricsBackup = c.lyricsBackup
+        v.matchOutput = c.matchOutput
+        v.learnTiming = c.learnTiming
         v.batterySaver = c.batterySaver
         v.showOnDesktop = c.showOnDesktop
         v.fontSize = c.fontSize

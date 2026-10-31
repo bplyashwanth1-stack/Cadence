@@ -44,6 +44,8 @@ struct StyleValues: Codable, Equatable {
     var titleCard = true  // song title slams in when a new song starts
     var autoSync = true  // correct lyric timing from the audio
     var lyricsBackup = true  // ask NetEase when LRCLIB has nothing
+    var matchOutput = true  // hold lyrics back by your headphones' delay
+    var learnTiming = true  // learn each song's line and word timing from the audio
     var batterySaver = true  // lighter visuals when unplugged
     var backgroundDarkness = 0.55
     var motion = 0.6
@@ -134,6 +136,18 @@ extension StyleValues {
     ]
 
     /// What Mix rotates through, line by line: smooth ones for verses, hard-hitting ones for the chorus.
+    /// Extra time ahead of the word, beyond the usual lead: slow entrances have to start sooner to land with the
+    /// voice, and quick hits or colour sweeps later, since they read straight away.
+    static func lead(_ style: String) -> Double {
+        switch style {
+        case "ink": return 0.14
+        case "reveal", "float", "cascade", "ripple", "bloom", "flip", "spin": return 0.06
+        case "slam", "stamp", "glitch", "jelly", "bounce", "pop", "swing": return -0.06
+        case "fill", "wave", "shine", "highlight", "typewriter", "comet", "fade", "rainbow": return -0.1
+        default: return 0
+        }
+    }
+
     private static let verseMix = ["reveal", "comet", "cascade", "highlight", "flip", "scramble", "shine", "bloom",
                                    "float", "ink", "swing", "ripple"]
     private static let chorusMix = ["slam", "neon", "glitch", "bounce", "stamp", "jelly", "rainbow"]

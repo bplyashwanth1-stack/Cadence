@@ -22,6 +22,12 @@ final class AutoSync {
     private var agreeing = 0
     private var timer: Timer?
     private var tick = 0
+    private var remembered = UserDefaults.standard.dictionary(forKey: "autoOffsets") as? [String: Double] ?? [:] {
+        didSet { UserDefaults.standard.set(remembered, forKey: "autoOffsets") }
+    }
+    private var trace: [(position: Double, level: Double)] = []
+    private var heard: [LyricLine] = []  // the lyrics the trace belongs to
+    private var learned = false
 
     func start() {
         guard timer == nil else { return }
@@ -35,6 +41,30 @@ final class AutoSync {
         samples = []
         candidate = nil
         offset = 0
+        trace = []
+        heard = []
+        learned = false
+    }
+
+    /// Learns from what was heard of a song, off the main thread, and saves it for next time.
+    private func learn(_ id: String?) {
+        guard !learned, let id, !heard.isEmpty, Style.shared.v.learnTiming, !SongTiming.shared.isManual(id),
+              !NowPlaying.shared.isEstimated(id), let saved = LyricsStore.load(id), !saved.contains("<") else { return }
+        learned = true
+        let lines = heard, trace = trace, offset = offset
+        DispatchQueue.global(qos: .utility).async {
+            guard let result = LearnedTiming.learn(lines: lines, trace: trace, offset: offset) else {
+                Log.write("learned timing: too unclear for \(id)")
+                return
+            }
+            LyricsStore.save(result.lrc, for: id)
+            DispatchQueue.main.async {
+                NowPlaying.shared.forgetCached(id)
+                self.remembered[id] = nil
+            }
+            Log.write(String(format: "learned timing for %@: %d of %d lines, typical move %.2f s", id, result.moved,
+                             result.total, result.shift))
+        }
     }
 
     private var listening = false
@@ -49,13 +79,18 @@ final class AutoSync {
             listening = listen
             AudioPulse.shared.setRunning(listen)
         }
+        tick += 1
+        if tick % Int(rate * 2) == 0 { player.outputDelay = s.matchOutput ? AudioPulse.outputDelay() : 0 }
         guard Style.shared.v.autoSync else {
             if offset != 0 { reset() }
             return
         }
         if player.track?.id != trackID {
+            learn(trackID)  // what was heard of the last song, if it wasn't learned near its end
             trackID = player.track?.id
             reset()
+            // Keeps what earlier plays found, so a replay is right from the first line.
+            offset = trackID.flatMap { remembered[$0] } ?? 0
         }
         // A song you've fixed by hand is left alone.
         guard player.isPlaying, !player.lyrics.isEmpty, !SongTiming.shared.isManual(player.track?.id),
@@ -67,7 +102,12 @@ final class AutoSync {
         samples.append((position, Double(audio.vocal)))
         if samples.count > Int(window * rate) { samples.removeFirst(samples.count - Int(window * rate)) }
 
-        tick += 1
+        heard = player.lyrics
+        for level in AudioPulse.shared.takeLevels() {
+            trace.append((player.position(at: level.date), Double(level.level)))
+        }
+        if position > player.duration * 0.92 { learn(trackID) }
+
         if tick % Int(rate * 4) == 0 { solve() }  // every 4 s
     }
 
@@ -133,6 +173,7 @@ final class AutoSync {
         }
         if agreeing >= 3, let candidate {
             offset = (candidate + best.shift) / 2
+            if let trackID { remembered[trackID] = offset }
             self.candidate = nil
             agreeing = 0
             Log.write(String(format: "auto-sync: lyrics shifted %+.1f s (match %.3f, runner-up %.3f)", offset,

@@ -45,6 +45,8 @@ final class AudioPulse {
     private var vocalPeak: Float = 1e-6
     private var bassAverage: Float = 0
     private var lastBeat = Date.distantPast
+    private var levels: [(date: Date, level: Float)] = []  // singing band, every 20 ms, until collected
+    private var lastLevel = Date.distantPast
 
     private init() {
         ring = [Float](repeating: 0, count: fftSize)
@@ -60,6 +62,37 @@ final class AudioPulse {
         lock.lock(); defer { lock.unlock() }
         let now = Date()
         return now.timeIntervalSince(state.updated) < 0.5 && now.timeIntervalSince(state.lastSound) < 2 ? state : nil
+    }
+
+    /// The singing-band levels since the last call, for learning a song's timing.
+    func takeLevels() -> [(date: Date, level: Float)] {
+        lock.lock(); defer { lock.unlock() }
+        let taken = levels
+        levels = []
+        return taken
+    }
+
+    /// How long sound takes to reach your ears after the Mac plays it, in seconds. Bluetooth headphones add a lot.
+    static func outputDelay() -> Double {
+        func read(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope) -> UInt32 {
+            var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+            var value: UInt32 = 0
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr ? value : 0
+        }
+        let device = read(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice,
+                          kAudioObjectPropertyScopeGlobal)
+        guard device != 0 else { return 0 }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var rate = 0.0
+        var size = UInt32(MemoryLayout<Double>.size)
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate) == noErr, rate > 0 else { return 0 }
+        let frames = read(device, kAudioDevicePropertyLatency, kAudioObjectPropertyScopeOutput)
+            + read(device, kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput)
+            + read(device, kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal)
+        return min(Double(frames) / rate, 0.5)
     }
 
     /// 1 on a bass hit, decaying to 0.
@@ -238,6 +271,11 @@ final class AudioPulse {
         bassAverage = bassAverage * 0.97 + bassEnergy * 0.03
 
         lock.lock()
+        if now.timeIntervalSince(lastLevel) >= 0.02 {
+            lastLevel = now
+            levels.append((now, vocal))
+            if levels.count > 2000 { levels.removeFirst(levels.count - 2000) }
+        }
         // Ease towards the new readings so bars don't flicker between callbacks.
         state.level += (level - state.level) * 0.5
         state.bass += (bass - state.bass) * 0.6

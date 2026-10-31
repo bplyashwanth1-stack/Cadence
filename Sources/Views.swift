@@ -99,13 +99,15 @@ struct WordView: View {
     @ViewBuilder
     private func effect(_ base: Text, _ string: String, _ s: StyleValues, _ size: Double,
                         _ dim: AnyShapeStyle) -> some View {
+        let chosen = s.wordStyle(line: line, chorus: player.repeated.contains(line))
+        let time = time + StyleValues.lead(chosen)
         let progress = word.progress(at: time)
         let appear = clamp((time - word.start) / 0.35)  // fixed-length entrance, independent of word length
         let lit = s.highlight(player.palette, onStage: isStage)
         let glow = s.glowColor(player.palette, onStage: isStage)
         let radius = size * 0.3 * s.glow
 
-        switch s.wordStyle(line: line, chorus: player.repeated.contains(line)) {
+        switch chosen {
         case "reveal":
             // Unsung words are invisible; each one rises and un-blurs into place.
             let e = easeOutCubic(appear)

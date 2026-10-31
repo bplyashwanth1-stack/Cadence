@@ -47,6 +47,10 @@ to have it come back whenever they play.
   for Tap to Sync.
 - **Auto-fix timing** — lines up when singing starts in the audio with when lines start, and shifts the
   lyrics when they're clearly early or late.
+- **Word timing** — real word-by-word timing from NetEase where it exists. Otherwise Cadence records the singing
+  band as a song plays, works out where each line and word really falls, and uses that on later plays.
+- **Matches your ears** — holds lyrics back by your output device's delay, which is large on Bluetooth headphones,
+  and starts slow word effects sooner than quick ones so they all land with the voice.
 - **Lyrics repair** — when the timed upload is missing lines or mangled, Cadence rebuilds it from the
   complete untimed lyrics, borrowing the timestamps.
 - **Your fixes stick** — nudge a song's timing (menu bar → This Song's Timing) and Cadence remembers it for
@@ -106,6 +110,7 @@ rebuilds.
 | `Sources/ReelLyrics.swift` | Poster lyrics: layout and motion graphics |
 | `Sources/Stages.swift` | Staged covers (polaroid, cassette, lake, cinema, retro grid), stage beams, VHS look |
 | `Sources/Worlds.swift` | Twelve whole scenes for the cover, from gallery to front page |
+| `Sources/Learned.swift` | Learns a song's line and word timing from the audio |
 | `Sources/BeatClock.swift` | Counts beats so the background lights travel with the music |
 | `Sources/Bursts.swift` | Keyword bursts |
 | `Sources/Aurora.swift` | Aurora background; artwork processing (blur, duotone, subject cut-out); grain |

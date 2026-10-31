@@ -36,6 +36,7 @@ struct PlayerState {
     let playing: Bool
     let position: Double
     let measuredAt: Date  // midpoint of the AppleScript call, when `position` was most likely read
+    let callTime: Double  // how long that call took; the longer, the less exact the reading
 }
 
 enum Player {
@@ -136,7 +137,8 @@ enum Player {
         let duration = isSpotify ? number(f[5]) / 1000 : number(f[5])
         let track = Track(id: (isSpotify ? "spotify:" : "music:") + f[1], title: f[2], artist: f[3], album: f[4],
                           duration: duration, artworkURL: isSpotify && f.count > 7 ? URL(string: f[7]) : nil)
-        return PlayerState(track: track, playing: f[0] == "playing", position: number(f[6]), measuredAt: measuredAt)
+        return PlayerState(track: track, playing: f[0] == "playing", position: number(f[6]), measuredAt: measuredAt,
+                           callTime: Date().timeIntervalSince(before))
     }
 }
 
@@ -184,6 +186,7 @@ enum LRCLib {
     private struct NetEaseLyric: Decodable {
         struct Text: Decodable { let lyric: String? }
         let lrc: Text?
+        let yrc: Text?  // real word-by-word timing, on some songs
     }
 
     enum Found {
@@ -300,11 +303,7 @@ enum LRCLib {
             if case .failed(let reason) = reply { return (nil, "NetEase \(reason)") }
             return (nil, nil)
         }
-        guard let songs = (try? JSONDecoder().decode(NetEaseSearch.self, from: data))?.result?.songs else { return (nil, nil) }
-        let matches = songs
-            .filter { sameSong($0.name, $0.artists.map(\.name).joined(separator: " "), $0.duration / 1000, as: track) }
-            .sorted { abs($0.duration / 1000 - track.duration) < abs($1.duration / 1000 - track.duration) }
-        for song in matches.prefix(3) {
+        for song in netEaseMatches(data, track).prefix(3) {
             var lyric = URLComponents(string: "https://music.163.com/api/song/lyric")!
             lyric.queryItems = [URLQueryItem(name: "id", value: String(song.id)), URLQueryItem(name: "lv", value: "1")]
             if case .found(let data) = await fetch(netEaseRequest(lyric.url!)),
@@ -314,6 +313,33 @@ enum LRCLib {
             }
         }
         return (nil, nil)
+    }
+
+    private static func netEaseMatches(_ data: Data, _ track: Track) -> [NetEaseSearch.Song] {
+        let songs = (try? JSONDecoder().decode(NetEaseSearch.self, from: data))?.result?.songs ?? []
+        return songs
+            .filter { sameSong($0.name, $0.artists.map(\.name).joined(separator: " "), $0.duration / 1000, as: track) }
+            .sorted { abs($0.duration / 1000 - track.duration) < abs($1.duration / 1000 - track.duration) }
+    }
+
+    /// Real word-by-word timing, when NetEase has it, for upgrading lyrics already on screen. `asked` is false if
+    /// NetEase couldn't be reached, so it's worth trying again another day.
+    static func wordTimed(_ track: Track) async -> (lrc: String?, asked: Bool) {
+        var search = URLComponents(string: "https://music.163.com/api/search/get")!
+        search.queryItems = [URLQueryItem(name: "s", value: clean(track.title)), URLQueryItem(name: "type", value: "1"),
+                             URLQueryItem(name: "limit", value: "10")]
+        guard case .found(let data) = await fetch(netEaseRequest(search.url!)) else { return (nil, false) }
+        for song in netEaseMatches(data, track).prefix(3) {
+            var lyric = URLComponents(string: "https://music.163.com/api/song/lyric/v1")!
+            lyric.queryItems = [URLQueryItem(name: "id", value: String(song.id)), URLQueryItem(name: "lv", value: "1"),
+                                URLQueryItem(name: "yv", value: "1"), URLQueryItem(name: "kv", value: "1")]
+            guard case .found(let reply) = await fetch(netEaseRequest(lyric.url!)) else { return (nil, false) }
+            if let raw = (try? JSONDecoder().decode(NetEaseLyric.self, from: reply))?.yrc?.lyric,
+               let lrc = LRC.fromWordTimed(raw).flatMap(withoutCredits) {
+                return (lrc, true)
+            }
+        }
+        return (nil, true)
     }
 
     private static func netEaseRequest(_ url: URL) -> URLRequest {
@@ -453,12 +479,50 @@ enum LyricsStore {
 
     static func load(_ id: String) -> String? { try? String(contentsOf: file(id), encoding: .utf8) }
     static func save(_ lrc: String, for id: String) { try? lrc.write(to: file(id), atomically: true, encoding: .utf8) }
-    static func remove(_ id: String) { try? FileManager.default.removeItem(at: file(id)) }
+    static func remove(_ id: String) {
+        try? FileManager.default.removeItem(at: file(id))
+        try? FileManager.default.removeItem(at: checkedFile(id))
+    }
+
+    // Whether NetEase has been asked for this song's word timing, so it's only looked up once.
+    private static func checkedFile(_ id: String) -> URL { file(id).appendingPathExtension("checked") }
+    static func checked(_ id: String) -> Bool { FileManager.default.fileExists(atPath: checkedFile(id).path) }
+    static func markChecked(_ id: String) { FileManager.default.createFile(atPath: checkedFile(id).path, contents: nil) }
 }
 
 enum LRC {
     private static let lineTag = try! NSRegularExpression(pattern: #"\[(\d+):(\d+(?:[.:]\d+)?)\]"#)
     private static let wordTag = try! NSRegularExpression(pattern: #"<(\d+):(\d+(?:[.:]\d+)?)>"#)
+
+    /// NetEase's word-timed format ("[start,length](start,length,0)word (start,length,0)word") as enhanced LRC.
+    /// Pieces with no space after them are parts of one word.
+    static func fromWordTimed(_ yrc: String) -> String? {
+        let piece = try! NSRegularExpression(pattern: #"\((\d+),(\d+),\d+\)"#)
+        func stamp(_ ms: Double, _ open: String, _ close: String) -> String {
+            let seconds = ms / 1000, minutes = Int(seconds) / 60
+            return open + String(format: "%02d:%05.2f", minutes, seconds - Double(minutes * 60)) + close
+        }
+        var out: [String] = []
+        for line in yrc.components(separatedBy: .newlines) where line.hasPrefix("[") {
+            let ns = line as NSString
+            let tags = piece.matches(in: line, range: NSRange(location: 0, length: ns.length))
+            guard let first = tags.first, let last = tags.last else { continue }
+            func number(_ match: NSTextCheckingResult, _ group: Int) -> Double { Double(ns.substring(with: match.range(at: group))) ?? 0 }
+            var text = stamp(number(first, 1), "[", "]")
+            var fresh = true  // the next piece begins a new word
+            for (i, tag) in tags.enumerated() {
+                let stop = i + 1 < tags.count ? tags[i + 1].range.location : ns.length
+                let word = ns.substring(with: NSRange(location: tag.range.upperBound, length: stop - tag.range.upperBound))
+                if word.trimmingCharacters(in: .whitespaces).isEmpty { fresh = true; continue }
+                if fresh { text += stamp(number(tag, 1), "<", ">") }
+                text += word.trimmingCharacters(in: .whitespaces)
+                fresh = word.hasSuffix(" ")
+                if fresh { text += " " }
+            }
+            out.append(text + stamp(number(last, 1) + number(last, 2), "<", ">"))
+        }
+        return out.isEmpty ? nil : out.joined(separator: "\n")
+    }
 
     /// Plain lyrics spread over the song by length of line. Only a rough guess at the timing, but the words are
     /// on screen, and tap-to-sync can fix them line by line.
@@ -669,10 +733,16 @@ final class NowPlaying: ObservableObject {
     /// Word changes are animated (springs, pop-ins of ~0.3 s), so a word drawn exactly at its timestamp only
     /// lands visibly a beat late. Leading slightly makes the animation arrive with the voice.
     private let visualLead = 0.12
+    /// Time from the Mac playing a sound to you hearing it; lyrics hold back to match your ears.
+    var outputDelay = 0.0 {
+        didSet {
+            if abs(outputDelay - oldValue) > 0.005 { Log.write("output delay: \(Int(outputDelay * 1000)) ms") }
+        }
+    }
 
     /// The song time lyrics are drawn at: playback position plus the animation lead and the user's offset.
     func lyricTime(at date: Date) -> Double {
-        position(at: date) + (isPlaying ? visualLead : 0) + Style.shared.v.offset + AutoSync.shared.offset
+        position(at: date) + (isPlaying ? visualLead - outputDelay : 0) + Style.shared.v.offset + AutoSync.shared.offset
             + SongTiming.shared.offset(track?.id)
     }
 
@@ -712,6 +782,7 @@ final class NowPlaying: ObservableObject {
     /// on the main thread they caused a visible hitch in the animation every poll.
     private let playerQueue = DispatchQueue(label: "cadence.player")
     private var polling = false
+    private var quickestCall = 1.0
 
     func poll() {
         guard !polling else { return }
@@ -735,12 +806,15 @@ final class NowPlaying: ObservableObject {
             trackStart = (state.measuredAt, state.position)
         }
         let measured = state.measuredAt
+        // A reading from a slow call could be off by up to half of it (they range from 30 to 180 ms), so it's no
+        // use for fine correction. The quickest recent call sets the bar.
+        quickestCall = min(quickestCall * 1.01, state.callTime)
         let drift = state.position - position(at: measured)
         if state.playing != isPlaying || abs(drift) > 0.25 {
             // Seek, pause or track change: jump straight to the player's position.
             basePosition = state.position
             baseTime = measured
-        } else if abs(drift) > 0.02 {
+        } else if abs(drift) > 0.02 && state.callTime <= quickestCall * 2 + 0.01 {
             // Small drift used to be ignored up to 0.3 s, so lyrics could sit that far off for a whole song.
             // Ease a third of the way towards the player each poll: converges in a few seconds, and a
             // single noisy reading moves words by only a few milliseconds.
@@ -794,10 +868,11 @@ final class NowPlaying: ObservableObject {
             status = cached.isEmpty ? "No synced lyrics for this song" : ""
             return
         }
-        if let saved = LyricsStore.load(track.id).map(LRC.parse), !saved.isEmpty {
+        if let text = LyricsStore.load(track.id), case let saved = LRC.parse(text), !saved.isEmpty {
             cache[track.id] = saved
             lyrics = saved
             status = ""
+            upgradeToWordTiming(track, text)
             return
         }
         // Ads and the gaps between songs come through with no title; there's nothing to search for.
@@ -837,6 +912,7 @@ final class NowPlaying: ObservableObject {
                 case .timed(let lrc):
                     lines = LRC.parse(lrc)
                     LyricsStore.save(lrc, for: track.id)
+                    self.upgradeToWordTiming(track, lrc)
                 case .plain(let plain):
                     lines = LRC.parse(LRC.estimated(plain, duration: track.duration))
                     estimated = !lines.isEmpty
@@ -853,6 +929,26 @@ final class NowPlaying: ObservableObject {
             }
         }
     }
+
+    /// Lyrics go up straight away; real word timing, if NetEase has it, replaces them in the background.
+    private func upgradeToWordTiming(_ track: Track, _ lrc: String) {
+        guard Style.shared.v.lyricsBackup, !lrc.contains("<"), !LyricsStore.checked(track.id) else { return }
+        Task {
+            let found = await LRCLib.wordTimed(track)
+            await MainActor.run {
+                if found.asked { LyricsStore.markChecked(track.id) }
+                guard let timed = found.lrc, SongTiming.shared.tapped(track.id) == nil else { return }
+                let lines = LRC.parse(timed)
+                LyricsStore.save(timed, for: track.id)
+                self.cache[track.id] = lines
+                Log.write("real word timing for \(track.title), \(lines.count) lines")
+                if self.track?.id == track.id { self.lyrics = lines }
+            }
+        }
+    }
+
+    func isEstimated(_ id: String) -> Bool { untimedIDs.contains(id) }
+    func forgetCached(_ id: String) { if track?.id != id { cache[id] = nil } }
 
     private let artworkQueue = DispatchQueue(label: "cadence.artwork", qos: .userInitiated)
     private let artworkSession: URLSession = {

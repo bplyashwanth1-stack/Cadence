@@ -79,6 +79,8 @@ struct SettingsView: View {
                 }
                 slider("All songs", $style.v.offset, -3...3) { String(format: "%+.1f s", $0) }
                 Toggle("Auto-fix timing from the audio", isOn: $style.v.autoSync)
+                Toggle("Match my headphones' delay", isOn: $style.v.matchOutput)
+                Toggle("Learn each song's timing as it plays", isOn: $style.v.learnTiming)
                 Toggle("Also search NetEase when LRCLIB has nothing (unofficial)", isOn: $style.v.lyricsBackup)
                 if style.v.autoSync && AutoSync.shared.offset != 0 {
                     LabeledContent("Auto correction") { Text(String(format: "%+.1f s", AutoSync.shared.offset)) }
