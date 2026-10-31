@@ -249,6 +249,77 @@ struct WordView: View {
             }
             .shadow(color: glow.opacity(appear > 0 ? s.glow : 0), radius: radius)
 
+        case "float":
+            let e = easeOutCubic(appear)
+            base.foregroundStyle(lit)
+                .opacity(appear)
+                .offset(y: (1 - e) * size * 0.6 + sin(time * 1.6 + Double(index)) * size * 0.04)
+                .shadow(color: glow.opacity(s.glow * appear), radius: radius)
+
+        case "ink":
+            // Soaks in from a wide, soft blot.
+            let spread = clamp((time - word.start) / 0.6)
+            base.foregroundStyle(lit)
+                .blur(radius: (1 - easeOutCubic(spread)) * size * 0.16)
+                .opacity(clamp(spread * 2))
+                .scaleEffect(1.1 - 0.1 * easeOutCubic(spread))
+
+        case "spin":
+            base.foregroundStyle(lit)
+                .rotation3DEffect(.degrees((1 - easeOutCubic(appear)) * 180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                .opacity(clamp(appear * 2.5))
+                .shadow(color: glow.opacity(s.glow * appear), radius: radius)
+
+        case "swing":
+            // Hangs from its top edge and swings to rest.
+            let age = time - word.start
+            base.foregroundStyle(lit)
+                .rotationEffect(.degrees(age < 0 ? 0 : 24 * exp(-age * 4) * cos(age * 11)), anchor: .top)
+                .opacity(clamp(appear * 3))
+                .shadow(color: glow.opacity(s.glow * appear), radius: radius)
+
+        case "rainbow":
+            let shift = time * 0.25 + Double(index) * 0.08
+            let hues = (0..<5).map { Color(hue: (shift + Double($0) * 0.13).truncatingRemainder(dividingBy: 1), saturation: 0.75, brightness: 1) }
+            base.foregroundStyle(appear > 0 ? AnyShapeStyle(LinearGradient(colors: hues, startPoint: .leading, endPoint: .trailing)) : dim)
+                .scaleEffect(1 + 0.06 * (appear > 0 ? 1 - appear : 0))
+                .shadow(color: glow.opacity(appear > 0 ? s.glow * 0.6 : 0), radius: radius)
+
+        case "stamp":
+            let hit = clamp((time - word.start) / 0.13)
+            base.foregroundStyle(lit)
+                .scaleEffect(1 + 0.9 * pow(1 - hit, 2))
+                .rotationEffect(.degrees((noise(index, 91) - 0.5) * 7 + (1 - hit) * 9))
+                .opacity(hit > 0 ? 1 : 0)
+                .shadow(color: glow.opacity(hit > 0 ? s.glow : 0), radius: radius)
+
+        case "smoke":
+            let gone = clamp((time - word.end - 0.5) / 1.6)
+            base.foregroundStyle(lit)
+                .opacity(appear * (1 - 0.85 * gone))
+                .blur(radius: gone * size * 0.14 + (1 - appear) * 5)
+                .offset(x: sin(gone * 5 + Double(index)) * size * 0.08 * gone, y: -gone * size * 0.7)
+
+        case "jelly":
+            let age = max(0, time - word.start)
+            let wobble = exp(-age * 6) * sin(age * 22)
+            base.foregroundStyle(lit)
+                .scaleEffect(x: 1 + 0.3 * wobble, y: 1 - 0.3 * wobble)
+                .opacity(clamp(appear * 4))
+                .shadow(color: glow.opacity(s.glow * appear), radius: radius)
+
+        case "ripple":
+            HStack(spacing: 0) {
+                ForEach(Array(string.enumerated()), id: \.offset) { i, c in
+                    let age = time - word.start - Double(i) * 0.04
+                    Text(String(c)).font(s.font(size: size)).tracking(s.tracking)
+                        .foregroundStyle(lit)
+                        .opacity(clamp(age / 0.12))
+                        .offset(y: age < 0 ? 0 : -sin(min(age / 0.45, 1) * .pi) * size * 0.22)
+                }
+            }
+            .shadow(color: glow.opacity(appear > 0 ? s.glow : 0), radius: radius)
+
         case "highlight":
             // A marker swipes behind the word as it's sung.
             let pad = size * 0.12
@@ -487,21 +558,31 @@ struct StageBackground: View {
     }
 }
 
-/// Lumn-style rim light whose brightness kicks on every sung word.
+/// Lumn-style rim light: two streaks of album colour racing around the screen edge at a steady brightness.
+/// The beat pushes them along rather than flashing them.
 struct EdgeGlow: View {
     let time: Double
     let date: Date
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
-        let colors = player.palette.map { Color(nsColor: $0) }
-        let pulse = player.kick(at: time, date: date)
+        let first = Color(nsColor: player.palette[0])
+        let second = Color(nsColor: player.palette[1 % player.palette.count])
+        let _ = BeatClock.shared.update(date: date, time: time)
+        let spin = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9000) * 40
+            + BeatClock.shared.travel(at: date) * 14
         // Soft edges come from gradient fades rather than a blur, which is far cheaper per frame.
         Rectangle()
-            .fill(AngularGradient(colors: colors + colors + [colors[0]], center: .center,
-                                  angle: .degrees(date.timeIntervalSinceReferenceDate * 24)))
+            .fill(AngularGradient(stops: [
+                .init(color: first.opacity(0), location: 0),
+                .init(color: first, location: 0.26),
+                .init(color: first.opacity(0), location: 0.31),
+                .init(color: second.opacity(0), location: 0.5),
+                .init(color: second, location: 0.76),
+                .init(color: second.opacity(0), location: 0.81),
+            ], center: .center, angle: .degrees(spin)))
             .mask(EdgeFade(thickness: 70))
-            .opacity(0.45 + 0.55 * pulse)
+            .opacity(0.85)
     }
 }
 
@@ -634,6 +715,8 @@ struct StageView: View {
                             .font(s.font(size: s.stageFontSize * 0.3))
                             .foregroundStyle(Color.white.opacity(0.6))
                             .frame(maxWidth: .infinity, alignment: s.frameAlignment)
+                    } else if s.stageLayout == "reel" {
+                        ReelLyricsView(time: time, date: context.date)
                     } else if s.stageLayout == "stack" {
                         WordStackView(time: time, date: context.date)
                     } else {
@@ -646,6 +729,14 @@ struct StageView: View {
                 .padding(.horizontal, 90)
                 .padding(.top, 44)
                 .padding(.bottom, 40)
+                if player.untimed {
+                    Text("Timing estimated · Tap to Sync fixes it")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .tracking(2)
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 140)
+                }
                 // Which preset the ✨ button just switched to, above the now-playing bar.
                 PresetToastView(date: context.date)
                     .frame(maxHeight: .infinity, alignment: .bottom)

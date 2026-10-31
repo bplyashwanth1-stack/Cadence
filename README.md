@@ -17,19 +17,31 @@ over a moving wallpaper made from the album art that hits on the beat.
 - **Hindi/Telugu in English letters**, spelled the way people type them ("premapichchi", not "premapicci").
 
 **Backgrounds**
-- **Album art, moving** — motion wallpaper, floating cover, duotone, spinning vinyl, kaleidoscope, or a
+- **Album art, moving** — motion wallpaper, floating cover, duotone, spinning vinyl, kaleidoscope, polaroid, cassette, moonlit lake, cinema, retro grid, or a
   spinning disc ringed by a live spectrum.
 - **Auto** cuts between them like an editor: on the drop, on new sections, every few beats in the chorus.
 - **Hears the music** (Core Audio process tap): zooms, flashes and particles kick on the real beat.
 - **The artist stands in front of the clock** — the person is cut out of the art with Vision.
-- Particles (bokeh, stars, embers, dust), light leaks, RGB split, edge glow, and a backing for readability.
+- Particles (bokeh, stars, embers, dust, snow, rain, petals, fireflies, lanterns, comets, bubbles), light leaks,
+  stage beams, VHS look, RGB split, edge glow, and a backing for readability.
 
-**Presets** — nine looks in one click (Reel Edit, Night Drive, Hype, Chill, Love Letter, Glitchcore, Movie
-Subs, Galaxy, Highlighter), plus your own. Switch from the menu bar, or with ✨ on the lock screen itself.
+- **Reel lyrics** — poster type built word by word, with slams, rises, echoes, colour blocks and blackouts.
+
+**Presets** — twenty-seven looks in one click (Fan Edit, Cinema Cut, Poster Drop, Reel Edit, Night Drive, Hype, Chill,
+Love Letter, Glitchcore, Movie Subs, Galaxy, Highlighter, Sad Hours, Golden Hour, Y2K,
+Polaroid Days, Mixtape, Moonlit, Late Show, Synthwave, Snow Globe, Monsoon, Sakura, Festival, Bubblegum, Stadium,
+Ripple), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
 
 **Getting the lyrics right**
 - Lyrics come from [LRCLIB](https://lrclib.net) (free, no account). Uploads are user-submitted, so Cadence
   picks the one whose timing agrees with the rest.
+- **Harder search** — if nothing turns up under the artist, Cadence searches by title and accepts a match only
+  when the length agrees, then tries NetEase Music's unofficial API (can be turned off in Settings; it sends
+  the song title to NetEase, and could stop working at any time).
+- **Saved lyrics** — timed lyrics are kept on disk, so songs you've played load instantly and work offline.
+  Failed searches retry by themselves every 30 s for 3 minutes.
+- **Plain lyrics** — when only untimed words exist, they're spread over the song with estimated timing, ready
+  for Tap to Sync.
 - **Auto-fix timing** — lines up when singing starts in the audio with when lines start, and shifts the
   lyrics when they're clearly early or late.
 - **Lyrics repair** — when the timed upload is missing lines or mangled, Cadence rebuilds it from the
@@ -88,6 +100,9 @@ rebuilds.
 | `Sources/Views.swift` | Word effects, lines layout, transitions, stage layers, desktop overlay |
 | `Sources/WordStack.swift` | Word stack layout and word icons |
 | `Sources/Wallpaper.swift` | Artwork backgrounds, spectrum ring, particles, light leaks, lyrics backing |
+| `Sources/ReelLyrics.swift` | Poster lyrics: layout and motion graphics |
+| `Sources/Stages.swift` | Staged covers (polaroid, cassette, lake, cinema, retro grid), stage beams, VHS look |
+| `Sources/BeatClock.swift` | Counts beats so the background lights travel with the music |
 | `Sources/Bursts.swift` | Keyword bursts |
 | `Sources/Aurora.swift` | Aurora background; artwork processing (blur, duotone, subject cut-out); grain |
 | `Sources/Controls.swift` | Now-playing bar, hover controls, scrubbing |

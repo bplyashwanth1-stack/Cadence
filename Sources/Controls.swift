@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 extension NowPlaying {
@@ -10,7 +11,10 @@ extension NowPlaying {
 
 final class HoverState: ObservableObject {
     static let shared = HoverState()
-    @Published var hovering = false
+    @Published var hovering = false {
+        didSet { if !hovering { presetsOpen = false } }
+    }
+    @Published var presetsOpen = false
 }
 
 private func timeString(_ seconds: Double) -> String {
@@ -28,12 +32,23 @@ struct NowPlayingBar: View {
 
     var body: some View {
         let visible = style.v.stageFooter && player.stageVisible(style.v) && player.track != nil
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
-            pill(position: player.position(at: context.date))
+        ZStack(alignment: .bottom) {
+            TimelineView(.periodic(from: .now, by: 0.25)) { context in
+                pill(position: player.position(at: context.date))
+            }
+            .frame(height: ControlsWindow.barHeight)
+            if hover.presetsOpen {
+                PresetList()
+                    .padding(.bottom, ControlsWindow.barHeight - 6)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 30)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.6), value: visible)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hover.presetsOpen)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     private func pill(position: Double) -> some View {
@@ -119,10 +134,31 @@ struct NowPlayingBar: View {
             button("backward.fill", size: 20) { player.control("previous track") }
             button(player.isPlaying ? "pause.fill" : "play.fill", size: 28) { player.control("playpause") }
             button("forward.fill", size: 20) { player.control("next track") }
-            button("sparkles", size: 20) { Presets.next() }
-                .help("Next preset")
+            Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 28)
+            HStack(spacing: 2) {
+                button("chevron.left", size: 15) { Presets.step(-1) }
+                    .help("Previous preset")
+                presetsButton
+                button("chevron.right", size: 15) { Presets.step(1) }
+                    .help("Next preset")
+            }
         }
         .padding(.leading, 4)
+    }
+
+    private var presetsButton: some View {
+        Button { hover.presetsOpen.toggle() } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 9, weight: .heavy))
+                    .rotationEffect(.degrees(hover.presetsOpen ? 180 : 0))
+            }
+            .frame(width: 44, height: 40)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .help("Choose a preset")
     }
 
     private func button(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
@@ -143,6 +179,65 @@ struct NowPlayingBar: View {
         } else {
             VisualEffect().clipShape(shape)
         }
+    }
+}
+
+/// Every preset, opening above the bar. A real menu is a window of its own and can't appear over the lock screen,
+/// so this is drawn inside the bar's window, which grows while it's open.
+struct PresetList: View {
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var hover = HoverState.shared
+
+    var body: some View {
+        let list = Presets.all(keeping: style.v)
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        ScrollViewReader { scroller in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 2) {
+                    ForEach(list, id: \.name) { preset in
+                        row(preset.name, preset.symbol, preset.values).id(preset.name)
+                    }
+                }
+                .padding(8)
+            }
+            .onAppear {
+                if let current = list.first(where: { $0.values == style.v }) {
+                    scroller.scrollTo(current.name, anchor: .center)
+                }
+            }
+        }
+        .frame(width: 270, height: ControlsWindow.listHeight)
+        .background {
+            ZStack {
+                VisualEffect()
+                Color.black.opacity(0.45)
+            }
+            .clipShape(shape)
+        }
+        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+    }
+
+    private func row(_ name: String, _ symbol: String, _ values: StyleValues) -> some View {
+        let selected = values == style.v
+        return Button {
+            Presets.pick(name, symbol, values)
+            hover.presetsOpen = false
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).frame(width: 22)
+                Text(name).lineLimit(1)
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
+            }
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(selected ? 0.16 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
     }
 }
 
@@ -177,8 +272,12 @@ final class ControlsHostingView: NSHostingView<NowPlayingBar> {
 
 /// Small clickable window for the now-playing bar, layered above the full-screen lyrics.
 final class ControlsWindow: NSPanel {
+    static let barHeight: CGFloat = 120
+    static let listHeight: CGFloat = 400
+    private var opening: AnyCancellable?
+
     init(screen: NSScreen) {
-        let size = NSSize(width: 640, height: 120)
+        let size = NSSize(width: 800, height: Self.barHeight)
         let frame = NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.minY + 34,
                            width: size.width, height: size.height)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -193,9 +292,17 @@ final class ControlsWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         let hosting = ControlsHostingView(rootView: NowPlayingBar())
         hosting.sizingOptions = []
+        hosting.autoresizingMask = [.width, .height]
         contentView = hosting
         orderFrontRegardless()
         LockScreen.attach(self)
+        // Grows upward for the preset list, then shrinks so it isn't covering anything the rest of the time.
+        opening = HoverState.shared.$presetsOpen.removeDuplicates().sink { [weak self] open in
+            guard let self else { return }
+            var frame = self.frame
+            frame.size.height = Self.barHeight + (open ? Self.listHeight : 0)
+            setFrame(frame, display: true)
+        }
     }
 
     override var canBecomeKey: Bool { false }

@@ -162,25 +162,158 @@ struct LyricLine: Identifiable {
 
 enum LRCLib {
     private struct Item: Decodable {
+        let trackName: String?
+        let artistName: String?
         let syncedLyrics: String?
         let plainLyrics: String?
         let duration: Double?
     }
 
-    /// LRCLIB entries are user-submitted and some are badly timed — the exact match for "Night Changes" runs
-    /// 5 s ahead of the ~20 other uploads. So gather every close match and take the one whose timing agrees
-    /// with the rest, instead of trusting the first hit.
-    static func lyrics(for track: Track) async -> String? {
-        async let exactData = request("get", [
+    private struct NetEaseSearch: Decodable {
+        struct Result: Decodable { let songs: [Song]? }
+        struct Song: Decodable {
+            struct Artist: Decodable { let name: String }
+            let id: Int
+            let name: String
+            let duration: Double  // milliseconds
+            let artists: [Artist]
+        }
+        let result: Result?
+    }
+
+    private struct NetEaseLyric: Decodable {
+        struct Text: Decodable { let lyric: String? }
+        let lrc: Text?
+    }
+
+    enum Found {
+        case timed(String)  // LRC
+        case plain(String)  // the words, with no timing
+    }
+
+    private enum Reply {
+        case found(Data)
+        case missing
+        case failed(String)
+    }
+
+    struct Unavailable: Error {
+        let reason: String
+    }
+
+    /// Works down from the best kind of answer: timed lyrics filed under this artist, timed lyrics filed under
+    /// anyone with the same title and length (Indian film songs are often credited to the singer in one place and
+    /// the composer in another), NetEase, and finally the plain words. Returns nil when the song has none of these;
+    /// throws when a source couldn't be asked, so a busy server isn't mistaken for a song without lyrics.
+    static func lyrics(for track: Track) async throws -> Found? {
+        async let exactReply = request("get", [
             "track_name": track.title, "artist_name": track.artist,
             "album_name": track.album, "duration": String(Int(track.duration.rounded())),
         ])
         // Search with "- Remastered", "(feat. …)" etc. stripped.
-        async let searchData = request("search", ["track_name": clean(track.title), "artist_name": track.artist])
+        async let searchReply = request("search", ["track_name": clean(track.title), "artist_name": track.artist])
+        let (exact, search) = await (exactReply, searchReply)
         var items: [Item] = []
-        if let data = await exactData, let item = try? JSONDecoder().decode(Item.self, from: data) { items.append(item) }
-        if let data = await searchData, let found = try? JSONDecoder().decode([Item].self, from: data) { items += found }
+        if case .found(let data) = exact, let item = try? JSONDecoder().decode(Item.self, from: data) { items.append(item) }
+        if case .found(let data) = search, let found = try? JSONDecoder().decode([Item].self, from: data) { items += found }
+        if let lrc = best(items, for: track) { return .timed(lrc) }
 
+        // Both at once, so a busy LRCLIB's retries don't hold up the answer NetEase may already have.
+        async let wideReply = request("search", ["track_name": clean(track.title)])
+        async let backupReply = Style.shared.v.lyricsBackup ? netEase(track) : (lrc: nil, failure: nil)
+        let (wide, backup) = await (wideReply, backupReply)
+        if case .found(let data) = wide, let found = try? JSONDecoder().decode([Item].self, from: data) {
+            items += found.filter { sameSong($0.trackName, $0.artistName, $0.duration, as: track) }
+        }
+        if let lrc = best(items, for: track) { return .timed(lrc) }
+
+        if let lrc = backup.lrc {
+            Log.write("lyrics for \(track.title) came from NetEase")
+            return .timed(lrc)
+        }
+        let plain = items
+            .filter { $0.plainLyrics?.isEmpty == false && sameSong($0.trackName, $0.artistName, $0.duration, as: track) }
+            .min { abs(($0.duration ?? 0) - track.duration) < abs(($1.duration ?? 0) - track.duration) }?
+            .plainLyrics
+        if let plain { return .plain(plain) }
+
+        // "Nothing found" needs every source to have really answered.
+        for reply in [exact, search, wide] {
+            if case .failed(let reason) = reply { throw Unavailable(reason: reason) }
+        }
+        if let failure = backup.failure { throw Unavailable(reason: failure) }
+        return nil
+    }
+
+    /// A match by title alone can be a different song, and wrong lyrics are worse than none: the length has to
+    /// agree, and without a shared artist name it has to agree closely.
+    private static func sameSong(_ title: String?, _ artist: String?, _ duration: Double?, as track: Track) -> Bool {
+        guard let title, let duration, key(clean(title)) == key(clean(track.title)), !key(track.title).isEmpty else {
+            return false
+        }
+        let theirs = Set(words(artist ?? ""))
+        let shared = words(track.artist).contains(where: theirs.contains)
+        return abs(duration - track.duration) <= (shared ? 4 : 1)
+    }
+
+    private static func key(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func words(_ text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter }.map(String.init).filter { $0.count >= 3 }
+    }
+
+    /// NetEase Music's public web API, which isn't documented or meant for other apps, so it can stop working at
+    /// any time. It has plenty of Indian songs LRCLIB is missing.
+    private static func netEase(_ track: Track) async -> (lrc: String?, failure: String?) {
+        var search = URLComponents(string: "https://music.163.com/api/search/get")!
+        search.queryItems = [URLQueryItem(name: "s", value: clean(track.title)), URLQueryItem(name: "type", value: "1"),
+                             URLQueryItem(name: "limit", value: "10")]
+        let reply = await fetch(netEaseRequest(search.url!))
+        guard case .found(let data) = reply else {
+            if case .failed(let reason) = reply { return (nil, "NetEase \(reason)") }
+            return (nil, nil)
+        }
+        guard let songs = (try? JSONDecoder().decode(NetEaseSearch.self, from: data))?.result?.songs else { return (nil, nil) }
+        let matches = songs
+            .filter { sameSong($0.name, $0.artists.map(\.name).joined(separator: " "), $0.duration / 1000, as: track) }
+            .sorted { abs($0.duration / 1000 - track.duration) < abs($1.duration / 1000 - track.duration) }
+        for song in matches.prefix(3) {
+            var lyric = URLComponents(string: "https://music.163.com/api/song/lyric")!
+            lyric.queryItems = [URLQueryItem(name: "id", value: String(song.id)), URLQueryItem(name: "lv", value: "1")]
+            if case .found(let data) = await fetch(netEaseRequest(lyric.url!)),
+               let raw = (try? JSONDecoder().decode(NetEaseLyric.self, from: data))?.lrc?.lyric,
+               let lrc = withoutCredits(raw) {
+                return (lrc, nil)
+            }
+        }
+        return (nil, nil)
+    }
+
+    private static func netEaseRequest(_ url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+        return request
+    }
+
+    /// NetEase timestamps the credits and marks instrumentals with a line of text; nil if no real lyrics are left.
+    private static func withoutCredits(_ lrc: String) -> String? {
+        let credits = ["作词", "作曲", "编曲", "制作", "混音", "纯音乐", "监制", "母带", "lyricist", "composer", "producer",
+                       "lyrics by", "composed by", "written by", "music by", "mixed by", "mastered by"]
+        let lines = lrc.components(separatedBy: .newlines).filter { line in
+            let lower = line.lowercased()
+            return !credits.contains { lower.contains($0) }
+        }
+        let sung = LRC.parse(lines.joined(separator: "\n")).filter { !$0.words.isEmpty }
+        return sung.count >= 8 ? lines.joined(separator: "\n") : nil
+    }
+
+    /// LRCLIB entries are user-submitted and some are badly timed — the exact match for "Night Changes" runs
+    /// 5 s ahead of the ~20 other uploads. So gather every close match and take the one whose timing agrees
+    /// with the rest, instead of trusting the first hit.
+    private static func best(_ items: [Item], for track: Track) -> String? {
         // A version more than a few seconds longer or shorter (radio edit, live, extended) has shifted
         // timestamps, which is worse than no lyrics.
         let candidates = items.compactMap { item -> (lrc: String, starts: [Double])? in
@@ -224,20 +357,93 @@ enum LRCLib {
         return t
     }
 
-    private static func request(_ path: String, _ query: [String: String]) async -> Data? {
+    /// The shared session waits 60 s on a stalled server and has no overall limit, which leaves the song
+    /// sitting on "Searching lyrics…".
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 15
+        return URLSession(configuration: config)
+    }()
+
+    private static func request(_ path: String, _ query: [String: String]) async -> Reply {
         var components = URLComponents(string: "https://lrclib.net/api/" + path)!
         components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
         var request = URLRequest(url: components.url!)
         request.setValue("Cadence/1.0 (personal lyrics overlay)", forHTTPHeaderField: "User-Agent")
-        guard let result = try? await URLSession.shared.data(for: request),
-              (result.1 as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return result.0
+        return await fetch(request)
     }
+
+    private static func fetch(_ request: URLRequest) async -> Reply {
+        let path = request.url?.lastPathComponent ?? ""
+        var attempt = 1
+        while true {
+            let data: Data, response: HTTPURLResponse?
+            do {
+                let result = try await session.data(for: request)
+                (data, response) = (result.0, result.1 as? HTTPURLResponse)
+            } catch {
+                return .failed("\(path): \(error.localizedDescription)")
+            }
+            switch response?.statusCode {
+            case 200:
+                return .found(data)
+            case 404:
+                return .missing
+            case 429, 503:
+                // LRCLIB sheds load with a 503 and a Retry-After of a second or so.
+                guard attempt < 3 else { return .failed("\(path): HTTP \(response?.statusCode ?? 0)") }
+                let wait = Double(response?.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 1
+                try? await Task.sleep(nanoseconds: UInt64(min(max(wait, 0.5), 3) * 1e9))
+                attempt += 1
+            default:
+                return .failed("\(path): HTTP \(response?.statusCode ?? 0)")
+            }
+        }
+    }
+}
+
+/// Timed lyrics kept on disk, so a song you've played loads instantly, offline, or while LRCLIB is down.
+/// Reloading a song's lyrics replaces its file.
+enum LyricsStore {
+    private static let folder: URL = {
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Cadence/Lyrics", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
+    private static func file(_ id: String) -> URL {
+        folder.appendingPathComponent(id.replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: "/", with: "_") + ".lrc")
+    }
+
+    static func load(_ id: String) -> String? { try? String(contentsOf: file(id), encoding: .utf8) }
+    static func save(_ lrc: String, for id: String) { try? lrc.write(to: file(id), atomically: true, encoding: .utf8) }
+    static func remove(_ id: String) { try? FileManager.default.removeItem(at: file(id)) }
 }
 
 enum LRC {
     private static let lineTag = try! NSRegularExpression(pattern: #"\[(\d+):(\d+(?:[.:]\d+)?)\]"#)
     private static let wordTag = try! NSRegularExpression(pattern: #"<(\d+):(\d+(?:[.:]\d+)?)>"#)
+
+    /// Plain lyrics spread over the song by length of line. Only a rough guess at the timing, but the words are
+    /// on screen, and tap-to-sync can fix them line by line.
+    static func estimated(_ plain: String, duration: Double) -> String {
+        let lines = plain.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !($0.hasPrefix("[") && $0.hasSuffix("]")) }  // drop "[Chorus]" labels
+        let total = lines.reduce(0) { $0 + $1.count }
+        guard total > 0 else { return "" }
+        let start = min(10, duration * 0.06), span = duration * 0.96 - start
+        var sung = 0
+        return lines.map { line in
+            let time = start + span * Double(sung) / Double(total)
+            sung += line.count
+            let minutes = Int(time) / 60
+            return String(format: "[%02d:%05.2f] %@", minutes, time - Double(minutes * 60), line)
+        }.joined(separator: "\n")
+    }
 
     static func parse(_ lrc: String) -> [LyricLine] {
         var raw: [(time: Double, text: String)] = []
@@ -420,6 +626,8 @@ final class NowPlaying: ObservableObject {
     private var basePosition = 0.0
     private var baseTime = Date()
     private var cache: [String: [LyricLine]] = [:]
+    @Published private(set) var untimed = false  // showing plain lyrics with estimated timing
+    private var untimedIDs: Set<String> = []
 
     func position(at date: Date) -> Double {
         isPlaying ? basePosition + date.timeIntervalSince(baseTime) : basePosition
@@ -527,6 +735,8 @@ final class NowPlaying: ObservableObject {
     func reloadLyrics() {
         guard let track else { return }
         cache[track.id] = nil
+        untimedIDs.remove(track.id)
+        LyricsStore.remove(track.id)
         loadLyrics(track)
     }
 
@@ -536,7 +746,8 @@ final class NowPlaying: ObservableObject {
         loadArtwork(track)
     }
 
-    private func loadLyrics(_ track: Track) {
+    private func loadLyrics(_ track: Track, attempt: Int = 0) {
+        untimed = false
         // Lyrics you timed yourself with tap-to-sync win over anything downloaded.
         if let tapped = SongTiming.shared.tapped(track.id) {
             lyrics = LRC.parse(tapped)
@@ -545,47 +756,142 @@ final class NowPlaying: ObservableObject {
         }
         if let cached = cache[track.id] {
             lyrics = cached
+            untimed = untimedIDs.contains(track.id)
             status = cached.isEmpty ? "No synced lyrics for this song" : ""
             return
         }
-        lyrics = []
-        status = "Searching lyrics…"
+        if let saved = LyricsStore.load(track.id).map(LRC.parse), !saved.isEmpty {
+            cache[track.id] = saved
+            lyrics = saved
+            status = ""
+            return
+        }
+        // Ads and the gaps between songs come through with no title; there's nothing to search for.
+        guard !track.title.trimmingCharacters(in: .whitespaces).isEmpty else {
+            lyrics = []
+            status = ""
+            return
+        }
+        // A retry stays quiet: the song keeps showing what went wrong until there's something better.
+        if attempt == 0 {
+            lyrics = []
+            status = "Searching lyrics…"
+        }
         Task {
-            let lines = await LRCLib.lyrics(for: track).map(LRC.parse) ?? []
+            let found: LRCLib.Found?
+            do {
+                found = try await LRCLib.lyrics(for: track)
+            } catch {
+                await MainActor.run {
+                    Log.write("lyrics search failed for \(track.title): \((error as? LRCLib.Unavailable)?.reason ?? "\(error)")")
+                    guard self.track?.id == track.id else { return }
+                    self.status = "Couldn't reach the lyrics service"
+                }
+                // Not cached, so it can try again: every 30 s for 3 minutes while the song is playing.
+                guard attempt < 6 else { return }
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                await MainActor.run {
+                    guard self.track?.id == track.id, self.cache[track.id] == nil else { return }
+                    self.loadLyrics(track, attempt: attempt + 1)
+                }
+                return
+            }
             await MainActor.run {
+                var lines: [LyricLine] = []
+                var estimated = false
+                switch found {
+                case .timed(let lrc):
+                    lines = LRC.parse(lrc)
+                    LyricsStore.save(lrc, for: track.id)
+                case .plain(let plain):
+                    lines = LRC.parse(LRC.estimated(plain, duration: track.duration))
+                    estimated = !lines.isEmpty
+                    if estimated { self.untimedIDs.insert(track.id) }
+                case nil:
+                    break
+                }
                 self.cache[track.id] = lines
-                Log.write("\(lines.count) lyric lines for \(track.title), first sung at \(lines.first { !$0.words.isEmpty }?.start ?? 0)s")
+                Log.write("\(lines.count) lyric lines\(estimated ? " (untimed)" : "") for \(track.title), first sung at \(lines.first { !$0.words.isEmpty }?.start ?? 0)s")
                 guard self.track?.id == track.id else { return }
                 self.lyrics = lines
+                self.untimed = estimated
                 self.status = lines.isEmpty ? "No synced lyrics for this song" : ""
             }
         }
     }
 
-    private func loadArtwork(_ track: Track) {
-        if let url = track.artworkURL {
-            URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-                guard let data, let image = NSImage(data: data) else { return }
-                self?.apply(artwork: image, for: track)
-            }.resume()
-        } else {
+    private let artworkQueue = DispatchQueue(label: "cadence.artwork", qos: .userInitiated)
+    private let artworkSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 12
+        return URLSession(configuration: config)
+    }()
+    private let artworkFolder: URL = {
+        let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Cadence/Artwork", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
+    /// A failed download used to leave the last song's wallpaper up for good, so it now retries for about half a
+    /// minute while the song is playing. Covers are kept on disk, so a song you've played needs no network at all.
+    private func loadArtwork(_ track: Track, attempt: Int = 1) {
+        guard let url = track.artworkURL else {
             playerQueue.async { [weak self] in
-                guard let data = Player.musicArtworkData(), let image = NSImage(data: data) else { return }
-                self?.apply(artwork: image, for: track)
+                guard let self else { return }
+                if let data = Player.musicArtworkData(), let image = NSImage(data: data) {
+                    artworkQueue.async { self.apply(artwork: image, for: track) }
+                } else {
+                    DispatchQueue.main.async { self.clearArtwork(for: track) }
+                }
             }
+            return
         }
+        let file = artworkFolder.appendingPathComponent(url.lastPathComponent)
+        if let saved = try? Data(contentsOf: file), let image = NSImage(data: saved) {
+            artworkQueue.async { self.apply(artwork: image, for: track) }
+            return
+        }
+        artworkSession.dataTask(with: url) { [weak self] data, response, error in
+            guard let self else { return }
+            if let data, (response as? HTTPURLResponse)?.statusCode == 200, let image = NSImage(data: data) {
+                try? data.write(to: file, options: .atomic)
+                artworkQueue.async { self.apply(artwork: image, for: track) }
+                return
+            }
+            DispatchQueue.main.async {
+                guard self.track?.id == track.id else { return }
+                Log.write("artwork failed for \(track.title) (try \(attempt)): \(error?.localizedDescription ?? "bad response")")
+                guard attempt < 5 else { return self.clearArtwork(for: track) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + pow(2, Double(attempt - 1))) {
+                    guard self.track?.id == track.id else { return }
+                    self.loadArtwork(track, attempt: attempt + 1)
+                }
+            }
+        }.resume()
     }
 
-    /// Runs off the main thread: palette and the pre-blurred backdrop are computed once per song.
+    /// With no cover to show, the album-coloured backdrop is better than another song's picture.
+    private func clearArtwork(for track: Track) {
+        guard self.track?.id == track.id else { return }
+        palette = Palette.fallback
+        artwork = nil
+        backdrop = nil
+        wallpaper = nil
+        duotone = nil
+        cutout = nil
+        duotoneCutout = nil
+    }
+
+    /// Runs off the main thread, one song at a time. The picture goes up first; cutting out the artist is slow, so
+    /// it follows, and is skipped if the song has already changed again.
     private func apply(artwork image: NSImage, for track: Track) {
+        guard DispatchQueue.main.sync(execute: { self.track?.id == track.id }) else { return }
         let palette = Palette.colors(from: image)
         let backdrop = Backdrop.blurred(image)
         let wallpaper = Backdrop.wallpaper(image)
         let duotone = Backdrop.duotone(image, palette: palette)
-        let mask = wallpaper.flatMap(Backdrop.subjectMask)
-        let cutout = mask.flatMap { mask in wallpaper.flatMap { Backdrop.cutout($0, mask: mask) } }
-        let duotoneCutout = mask.flatMap { mask in duotone.flatMap { Backdrop.cutout($0, mask: mask) } }
-        Log.write("artwork subject cut-out: \(cutout == nil ? "none" : "found")")
         DispatchQueue.main.async {
             guard self.track?.id == track.id else { return }
             self.palette = palette
@@ -593,6 +899,17 @@ final class NowPlaying: ObservableObject {
             self.backdrop = backdrop
             self.wallpaper = wallpaper
             self.duotone = duotone
+            // The last song's artist mustn't stand on top of the new cover.
+            self.cutout = nil
+            self.duotoneCutout = nil
+        }
+        guard DispatchQueue.main.sync(execute: { self.track?.id == track.id }) else { return }
+        let mask = wallpaper.flatMap(Backdrop.subjectMask)
+        let cutout = mask.flatMap { mask in wallpaper.flatMap { Backdrop.cutout($0, mask: mask) } }
+        let duotoneCutout = mask.flatMap { mask in duotone.flatMap { Backdrop.cutout($0, mask: mask) } }
+        Log.write("artwork subject cut-out: \(cutout == nil ? "none" : "found")")
+        DispatchQueue.main.async {
+            guard self.track?.id == track.id else { return }
             self.cutout = cutout
             self.duotoneCutout = duotoneCutout
         }

@@ -235,9 +235,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(choiceMenu("Background", [
             ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("cover", "Floating cover"),
             ("disc", "Disc"), ("duotone", "Duotone"), ("vinyl", "Vinyl"), ("kaleido", "Kaleidoscope"),
+            ("polaroid", "Polaroid"), ("cassette", "Cassette"), ("lake", "Moonlit Lake"), ("cinema", "Cinema"), ("retro", "Retro Grid"),
             ("aurora", "Aurora"), ("black", "Black"),
         ], #selector(pickBackground(_:))))
-        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines")], #selector(pickLayout(_:))))
+        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics")], #selector(pickLayout(_:))))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(timingMenu())

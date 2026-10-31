@@ -79,6 +79,7 @@ struct SettingsView: View {
                 }
                 slider("All songs", $style.v.offset, -3...3) { String(format: "%+.1f s", $0) }
                 Toggle("Auto-fix timing from the audio", isOn: $style.v.autoSync)
+                Toggle("Also search NetEase when LRCLIB has nothing (unofficial)", isOn: $style.v.lyricsBackup)
                 if style.v.autoSync && AutoSync.shared.offset != 0 {
                     LabeledContent("Auto correction") { Text(String(format: "%+.1f s", AutoSync.shared.offset)) }
                 }
@@ -99,6 +100,7 @@ struct SettingsView: View {
             Picker("Layout", selection: $style.v.stageLayout) {
                 Text("Word stack").tag("stack")
                 Text("Lines").tag("lines")
+                Text("Reel").tag("reel")
             }
             .pickerStyle(.segmented)
             if style.v.stageLayout == "stack" {
@@ -117,6 +119,11 @@ struct SettingsView: View {
                 Text("Duotone — artwork in two album colors").tag("duotone")
                 Text("Vinyl — spinning record").tag("vinyl")
                 Text("Kaleidoscope — mirrored artwork").tag("kaleido")
+                Text("Polaroid — the cover swinging on a string").tag("polaroid")
+                Text("Cassette — the cover on a turning tape").tag("cassette")
+                Text("Moonlit Lake — the cover over rippling water").tag("lake")
+                Text("Cinema — the cover on the big screen").tag("cinema")
+                Text("Retro Grid — the cover on a neon sunset").tag("retro")
                 Divider()
                 Text("Aurora — flowing album colors and artwork").tag("aurora")
                 Text("Album color").tag("album")
@@ -153,8 +160,17 @@ struct SettingsView: View {
                 Text("Stars").tag("stars")
                 Text("Embers").tag("embers")
                 Text("Dust").tag("dust")
+                Text("Snow").tag("snow")
+                Text("Rain").tag("rain")
+                Text("Petals").tag("petals")
+                Text("Fireflies").tag("fireflies")
+                Text("Lanterns").tag("lanterns")
+                Text("Comets").tag("comets")
+                Text("Bubbles").tag("bubbles")
             }
             Toggle("Light leaks", isOn: $style.v.lightLeaks)
+            Toggle("Stage beams", isOn: $style.v.lightBeams)
+            Toggle("VHS look", isOn: $style.v.vhs)
             Toggle("Keyword bursts — fire, rain, hearts, stars… when sung", isOn: $style.v.keywordBursts)
             Toggle("React to the music (asks to listen to audio)", isOn: $style.v.audioReactive)
             Picker("Behind the lyrics", selection: $style.v.lyricsBacking) {

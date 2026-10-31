@@ -31,11 +31,11 @@ struct StyleValues: Codable, Equatable {
 
     // Lock screen
     var showOnLockScreen = true
-    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines
+    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines, reel (poster motion graphics)
     var stageFontSize = 150.0
     var stageIcons = true
     var stageDrift = true
-    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, aurora, album, gradient, custom, black
+    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, polaroid, cassette, lake, cinema, retro, aurora, album, gradient, custom, black
     var audioReactive = true
     var depth = true  // the artist cut out of the artwork stands in front of the clock
     var depthOverLyrics = false  // …and in front of the lyrics too (can hide the word being sung)
@@ -43,13 +43,16 @@ struct StyleValues: Codable, Equatable {
     var romanize = false  // Hindi, Urdu, etc. shown in English letters
     var titleCard = true  // song title slams in when a new song starts
     var autoSync = true  // correct lyric timing from the audio
+    var lyricsBackup = true  // ask NetEase when LRCLIB has nothing
     var batterySaver = true  // lighter visuals when unplugged
     var backgroundDarkness = 0.55
     var motion = 0.6
     var beatZoom = true
     var rgbSplit = false
-    var particles = "none"  // none, bokeh, stars, embers, dust
+    var particles = "none"  // none, bokeh, stars, embers, dust, snow, rain, petals, fireflies, lanterns, comets, bubbles
     var lightLeaks = false
+    var lightBeams = false  // stage spotlights sweeping from above
+    var vhs = false  // scan lines and a rolling tracking band
     var lyricsBacking = "none"  // none, shade, glass, band
     var stackStyle = "effect"  // effect (the chosen word effect), box (highlighter)
     var stageHex = "#14141A"
@@ -85,7 +88,7 @@ final class Style: ObservableObject {
            let defaults = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(StyleValues())) as? [String: Any],
            let merged = try? JSONSerialization.data(withJSONObject: defaults.merging(saved) { $1 }),
            let values = try? JSONDecoder().decode(StyleValues.self, from: merged) {
-            v = values
+            v = values.withoutRetiredBackground()
         } else {
             v = StyleValues()
         }
@@ -103,6 +106,15 @@ extension StyleValues {
     /// Every word effect, as (tag, label) — shared by Settings and the menu bar.
     static let wordEffects: [(String, String)] = [
         ("comet", "Comet — a comet streaks through the words"),
+        ("float", "Float — words drift up and keep bobbing"),
+        ("ink", "Ink — words bleed in like ink on paper"),
+        ("spin", "Spin — words turn round to face you"),
+        ("swing", "Swing — words swing down from above"),
+        ("rainbow", "Rainbow — colour flows through the words"),
+        ("stamp", "Stamp — words thump down at an angle"),
+        ("smoke", "Smoke — words rise away as smoke once sung"),
+        ("jelly", "Jelly — words wobble in"),
+        ("ripple", "Ripple — a wave runs through the letters"),
         ("neon", "Neon — flickers on and glows"),
         ("glitch", "Glitch — RGB-split jitter"),
         ("slam", "Slam — words hit with a shake"),
@@ -122,8 +134,9 @@ extension StyleValues {
     ]
 
     /// What Mix rotates through, line by line: smooth ones for verses, hard-hitting ones for the chorus.
-    private static let verseMix = ["reveal", "comet", "cascade", "highlight", "flip", "scramble", "shine", "bloom"]
-    private static let chorusMix = ["slam", "neon", "glitch", "bounce"]
+    private static let verseMix = ["reveal", "comet", "cascade", "highlight", "flip", "scramble", "shine", "bloom",
+                                   "float", "ink", "swing", "ripple"]
+    private static let chorusMix = ["slam", "neon", "glitch", "bounce", "stamp", "jelly", "rainbow"]
     private static let transitionMix = ["zoom", "flip", "slide", "push", "drop", "blur"]
 
     /// The word effect for a given lyric line, resolving Mix.
@@ -138,7 +151,17 @@ extension StyleValues {
         return Self.transitionMix[Int(noise(line, 32) * Double(Self.transitionMix.count))]
     }
 
-    static let wallpapers: Set<String> = ["auto", "motion", "cover", "disc", "duotone", "vinyl", "kaleido"]
+    static let wallpapers: Set<String> = ["auto", "motion", "cover", "disc", "duotone", "vinyl", "kaleido",
+                                          "polaroid", "cassette", "lake", "cinema", "retro"]
+
+    /// Backgrounds that no longer exist, for settings and saved presets from older builds.
+    func withoutRetiredBackground() -> StyleValues {
+        var v = self
+        if ["beatmix", "pixels", "pillars", "tunnel", "slices", "photos"].contains(v.stageBackground) {
+            v.stageBackground = "motion"
+        }
+        return v
+    }
 
     static func weight(_ name: String) -> Font.Weight {
         switch name {

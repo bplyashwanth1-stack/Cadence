@@ -96,6 +96,24 @@ struct WallpaperBackground: View {
         case "duotone": kenBurns(s, player.duotone ?? art, size, t, pulse)
         case "vinyl": vinyl(s, art, size, t, pulse)
         case "kaleido": kaleidoscope(s, art, size, t, pulse)
+        case "polaroid":
+            ZStack {
+                blurredFill(art, size, t)
+                PolaroidScene(art: art, title: player.track?.title ?? "", size: size, t: t, motion: s.motion)
+            }
+        case "cassette":
+            ZStack {
+                blurredFill(art, size, t)
+                CassetteScene(art: art, title: player.track?.title ?? "", size: size, t: t, motion: s.motion)
+            }
+        case "lake":
+            ZStack {
+                blurredFill(art, size, t)
+                Color.black.opacity(0.35)
+                LakeScene(art: art, size: size, t: t, motion: s.motion)
+            }
+        case "cinema": CinemaScene(art: art, size: size, t: t, palette: player.palette)
+        case "retro": RetroGridScene(art: art, size: size, t: t, motion: s.motion, palette: player.palette)
         default: kenBurns(s, art, size, t, pulse)
         }
     }
@@ -322,34 +340,38 @@ struct StageEffects: View {
     var body: some View {
         let s = style.v
         let t = date.timeIntervalSinceReferenceDate
-        let pulse = player.kick(at: time, date: date)
+        let _ = BeatClock.shared.update(date: date, time: time)
+        let travel = BeatClock.shared.travel(at: date)
         ZStack {
             // Battery saver drops the ambient extras; keyword bursts are brief, so they stay.
-            if s.lightLeaks && !Power.shared.saving { LightLeaks(t: t, pulse: pulse, palette: player.palette) }
-            if s.particles != "none" && !Power.shared.saving { Particles(kind: s.particles, t: t, pulse: pulse, palette: player.palette) }
+            if s.lightLeaks && !Power.shared.saving { LightLeaks(t: t, travel: travel, palette: player.palette) }
+            if s.particles != "none" && !Power.shared.saving { Particles(kind: s.particles, t: t, travel: travel, palette: player.palette) }
+            if s.lightBeams && !Power.shared.saving { LightBeams(t: t, travel: travel, palette: player.palette) }
+            if s.vhs { VHSOverlay(t: t) }
             if s.keywordBursts { KeywordBursts(time: time, palette: player.palette) }
         }
         .allowsHitTesting(false)
     }
 }
 
-/// Soft blooms of album colour and warm film light drifting around the edges, like light leaking into a camera.
+/// Soft blooms of album colour and warm film light sweeping across the screen, like light leaking into a camera.
+/// They hold a steady brightness; each beat carries them further along.
 struct LightLeaks: View {
     let t: Double
-    let pulse: Double
+    let travel: Double
     let palette: [NSColor]
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let boost = 1 + 0.5 * pulse
+            let p = t.truncatingRemainder(dividingBy: 9000) * 0.3 + travel * 0.14
             ZStack {
-                leak(Color(nsColor: palette[0]), w * (0.5 + 0.6 * cos(t * 0.11)), h * (0.5 + 0.65 * sin(t * 0.13)),
-                     w * 0.45, 0.3 * boost)
-                leak(Color(nsColor: palette[1 % palette.count]), w * (0.5 + 0.62 * sin(t * 0.07 + 2)),
-                     h * (0.5 + 0.6 * cos(t * 0.09 + 1)), w * 0.4, 0.26 * boost)
-                leak(Color(red: 1, green: 0.55, blue: 0.25), w * (0.5 + 0.7 * cos(t * 0.05 + 4)), h * -0.05,
-                     w * 0.35, (0.16 + 0.1 * sin(t * 0.3)) * boost)
+                leak(Color(nsColor: palette[0]), w * (0.5 + 0.6 * cos(p * 1.1)), h * (0.5 + 0.65 * sin(p * 1.3)),
+                     w * 0.45, 0.32)
+                leak(Color(nsColor: palette[1 % palette.count]), w * (0.5 + 0.62 * sin(p * 0.7 + 2)),
+                     h * (0.5 + 0.6 * cos(p * 0.9 + 1)), w * 0.4, 0.28)
+                leak(Color(red: 1, green: 0.55, blue: 0.25), w * (0.5 + 0.7 * cos(p * 0.5 + 4)), h * (0.1 + 0.2 * sin(p * 0.8)),
+                     w * 0.35, 0.2)
             }
             .blendMode(.screen)
         }
@@ -364,11 +386,12 @@ struct LightLeaks: View {
     }
 }
 
-/// Bokeh, twinkling stars, rising embers or drifting dust, all drawn in one Canvas pass.
+/// Bokeh, stars, rising embers or drifting dust, all drawn in one Canvas pass. They keep a steady brightness and
+/// beats carry them along.
 struct Particles: View {
     let kind: String
     let t: Double
-    let pulse: Double
+    let travel: Double
     let palette: [NSColor]
 
     private func wrap(_ v: Double, _ m: Double) -> Double {
@@ -379,30 +402,30 @@ struct Particles: View {
     var body: some View {
         Canvas { ctx, size in
             let w = size.width, h = size.height
-            let t = self.t.truncatingRemainder(dividingBy: 100_000)
-            let count = ["bokeh": 22, "stars": 90, "embers": 60][kind] ?? 120
+            let t = self.t.truncatingRemainder(dividingBy: 100_000) + travel * 0.5
+            let count = ["bokeh": 22, "stars": 90, "embers": 60, "snow": 110, "rain": 150, "petals": 46, "fireflies": 34,
+                         "lanterns": 16, "comets": 6, "bubbles": 30][kind] ?? 120
             for i in 0..<count {
                 let r1 = noise(i, 11), r2 = noise(i, 12), r3 = noise(i, 13), r4 = noise(i, 14)
                 let color = Color(nsColor: palette[i % palette.count])
                 switch kind {
                 case "bokeh":
                     let radius = 30 + r3 * 110
-                    let y = wrap(r2 * (h + 2 * radius) - t * (8 + r4 * 18), h + 2 * radius) - radius
+                    let y = wrap(r2 * (h + 2 * radius) - t * (24 + r4 * 40), h + 2 * radius) - radius
                     let x = r1 * w + sin(t * 0.2 + r3 * 6) * 40
-                    let a = (0.08 + 0.16 * r4) * (1 + 0.7 * pulse)
+                    let a = 0.1 + 0.18 * r4
                     ctx.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
                              with: .radialGradient(Gradient(colors: [color.opacity(a), color.opacity(a * 0.7), color.opacity(0)]),
                                                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: radius))
                 case "stars":
-                    let twinkle = 0.5 + 0.5 * sin(t * (1 + r4 * 3) + r3 * 20)
                     let radius = 0.8 + r3 * 2
-                    let x = wrap(r1 * w + t * (2 + r4 * 5), w), y = r2 * h
-                    let a = twinkle * (0.45 + 0.4 * pulse)
+                    let x = wrap(r1 * w + t * (10 + r4 * 26), w), y = r2 * h
+                    let a = 0.4 + 0.4 * r4
                     ctx.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
                              with: .color(.white.opacity(a)))
                     if r3 > 0.86 {
                         // The brightest few get a four-point flare.
-                        let flare = radius * 7 * twinkle
+                        let flare = radius * 6
                         ctx.fill(Path(CGRect(x: x - flare, y: y - 0.5, width: flare * 2, height: 1)), with: .color(.white.opacity(a * 0.7)))
                         ctx.fill(Path(CGRect(x: x - 0.5, y: y - flare, width: 1, height: flare * 2)), with: .color(.white.opacity(a * 0.7)))
                     }
@@ -410,15 +433,81 @@ struct Particles: View {
                     let y = wrap(r2 * (h + 40) - t * (30 + r4 * 60), h + 40) - 20
                     let x = r1 * w + sin(t * (0.8 + r3) + r4 * 9) * 30
                     let radius = 1.2 + r3 * 2.4
-                    let flicker = 0.6 + 0.4 * sin(t * (6 + r4 * 8) + r1 * 30)
                     let fire = Color(nsColor: palette[0].blended(withFraction: 0.5, of: .orange) ?? palette[0])
-                    let a = flicker * (0.5 + 0.4 * pulse) * min(1, y / h * 1.6)  // fade out as they rise
+                    let a = 0.75 * min(1, y / h * 1.6)  // fade out as they rise
                     let glow = radius * 4
                     ctx.fill(Path(ellipseIn: CGRect(x: x - glow, y: y - glow, width: glow * 2, height: glow * 2)),
                              with: .radialGradient(Gradient(colors: [fire.opacity(a * 0.5), fire.opacity(0)]),
                                                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: glow))
                     ctx.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
                              with: .color(.white.opacity(a)))
+                case "snow":
+                    let radius = 1.2 + r3 * r3 * 4.5
+                    let y = wrap(r2 * (h + 20) + t * (18 + radius * 12), h + 20) - 10
+                    let x = wrap(r1 * w + sin(t * (0.3 + r4 * 0.5) + r3 * 9) * 36, w)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
+                             with: .color(.white.opacity(0.35 + 0.45 * r4)))
+                case "rain":
+                    let length = 22 + r3 * 46
+                    let y = wrap(r2 * (h + length) + t * (420 + r4 * 340), h + length) - length
+                    let x = wrap(r1 * (w + 100) - y * 0.16, w + 100) - 50
+                    var streak = Path()
+                    streak.move(to: CGPoint(x: x, y: y))
+                    streak.addLine(to: CGPoint(x: x - length * 0.16, y: y + length))
+                    ctx.stroke(streak, with: .color(.white.opacity(0.14 + 0.2 * r4)), lineWidth: 1.2)
+                case "petals":
+                    let side = 8 + r3 * 12
+                    let y = wrap(r2 * (h + 40) + t * (34 + r4 * 40), h + 40) - 20
+                    let x = wrap(r1 * w + t * (14 + r3 * 22) + sin(t * (0.5 + r4) + r3 * 9) * 60, w)
+                    var c = ctx
+                    c.translateBy(x: x, y: y)
+                    c.rotate(by: .radians(t * (0.5 + r4 * 1.3) + r1 * 6))
+                    c.scaleBy(x: 0.45 + 0.55 * abs(cos(t * (0.8 + r3) + r2 * 6)), y: 1)
+                    let tint = Color(red: 1, green: 0.72 + 0.14 * r4, blue: 0.82)
+                    c.fill(Path(ellipseIn: CGRect(x: -side / 2, y: -side * 0.32, width: side, height: side * 0.64)),
+                           with: .color(tint.opacity(0.85)))
+                case "fireflies":
+                    let x = w * (0.5 + 0.48 * sin(t * (0.12 + r3 * 0.2) + Double(i) * 2.399))
+                    let y = h * (0.55 + 0.42 * cos(t * (0.1 + r4 * 0.2) + Double(i) * 1.618))
+                    let glow = 12 + r3 * 16
+                    let lit = Color(red: 0.92, green: 1, blue: 0.5)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - glow, y: y - glow, width: glow * 2, height: glow * 2)),
+                             with: .radialGradient(Gradient(colors: [lit.opacity(0.5), lit.opacity(0)]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: glow))
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)), with: .color(.white.opacity(0.9)))
+                case "lanterns":
+                    let side = 16 + r3 * 26
+                    let y = wrap(r2 * (h + 120) - t * (16 + r4 * 18), h + 120) - 60
+                    let x = r1 * w + sin(t * (0.2 + r3 * 0.3) + r4 * 9) * 30
+                    let rect = CGRect(x: x - side / 2, y: y - side * 0.65, width: side, height: side * 1.3)
+                    let halo = side * 2.2
+                    let warm = Color(red: 1, green: 0.62, blue: 0.22)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - halo, y: y - halo, width: halo * 2, height: halo * 2)),
+                             with: .radialGradient(Gradient(colors: [warm.opacity(0.42), warm.opacity(0)]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: halo))
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: side * 0.3),
+                             with: .linearGradient(Gradient(colors: [Color(red: 1, green: 0.42, blue: 0.14), Color(red: 1, green: 0.85, blue: 0.45)]),
+                                                   startPoint: CGPoint(x: x, y: rect.minY), endPoint: CGPoint(x: x, y: rect.maxY)))
+                case "comets":
+                    let period = w + h + 500
+                    let head = wrap(r1 * period + t * (160 + r4 * 180), period)
+                    let x = head - 250, y = head * 0.42 + r2 * h * 0.5 - 120
+                    let tail = 140 + r3 * 180
+                    var streak = Path()
+                    streak.move(to: CGPoint(x: x, y: y))
+                    streak.addLine(to: CGPoint(x: x - tail, y: y - tail * 0.42))
+                    ctx.stroke(streak, with: .linearGradient(Gradient(colors: [.white.opacity(0.9), .white.opacity(0)]),
+                                                             startPoint: CGPoint(x: x, y: y),
+                                                             endPoint: CGPoint(x: x - tail, y: y - tail * 0.42)),
+                               style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                case "bubbles":
+                    let radius = 8 + r3 * 30
+                    let y = wrap(r2 * (h + 2 * radius) - t * (26 + r4 * 34), h + 2 * radius) - radius
+                    let x = r1 * w + sin(t * (0.5 + r4) + r3 * 9) * 24
+                    let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+                    ctx.stroke(Path(ellipseIn: rect), with: .color(.white.opacity(0.32)), lineWidth: 1.4)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - radius * 0.5, y: y - radius * 0.6, width: radius * 0.36, height: radius * 0.24)),
+                             with: .color(.white.opacity(0.55)))
                 default:  // dust
                     let x = wrap(r1 * w + t * (6 + r4 * 10), w)
                     let y = wrap(r2 * h + t * (3 + r3 * 6) + sin(t * 0.5 + r4 * 7) * 10, h)
