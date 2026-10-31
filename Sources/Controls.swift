@@ -193,28 +193,31 @@ struct PresetList: View {
     var body: some View {
         let list = Presets.all(keeping: style.v)
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        ScrollViewReader { scroller in
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 2) {
-                    ForEach(list, id: \.name) { preset in
-                        row(preset.name, preset.symbol, preset.values).id(preset.name)
+        VStack(spacing: 0) {
+            ScrollViewReader { scroller in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 2) {
+                        ForEach(list, id: \.name) { preset in
+                            row(preset.name, preset.symbol, preset.values).id(preset.name)
+                        }
+                    }
+                    .padding(8)
+                }
+                .onAppear {
+                    if let current = list.first(where: { $0.values == style.v }) {
+                        scroller.scrollTo(current.name, anchor: .center)
                     }
                 }
-                .padding(8)
             }
-            .onAppear {
-                if let current = list.first(where: { $0.values == style.v }) {
-                    scroller.scrollTo(current.name, anchor: .center)
-                }
+            .frame(height: ControlsWindow.listHeight - 46)
+            .clipped()
+            Rectangle().fill(Color.white.opacity(0.14)).frame(height: 1)
+            HStack(spacing: 6) {
+                pin("This song", artist: false)
+                pin("This artist", artist: true)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(spacing: 6) {
-                    pin("This song", artist: false)
-                    pin("This artist", artist: true)
-                }
-                .padding(8)
-                .background(Color.black.opacity(0.35))
-            }
+            .padding(.horizontal, 8)
+            .frame(height: 45)
         }
         .frame(width: 270, height: ControlsWindow.listHeight)
         .background {
