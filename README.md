@@ -38,9 +38,8 @@ to have it come back whenever they play.
 **Getting the lyrics right**
 - Lyrics come from [LRCLIB](https://lrclib.net) (free, no account). Uploads are user-submitted, so Cadence
   picks the one whose timing agrees with the rest.
-- **Harder search** — if nothing turns up under the artist, Cadence searches by title and accepts a match only
-  when the length agrees, then tries NetEase Music's unofficial API (can be turned off in Settings; it sends
-  the song title to NetEase, and could stop working at any time).
+- **Every source at once** — LRCLIB, NetEase, KuGou and lyrics.ovh race, so the first good answer shows
+  straight away, and a better one replaces it. A source that's down is skipped for two minutes.
 - **Saved lyrics** — timed lyrics are kept on disk, so songs you've played load instantly and work offline.
   Failed searches retry by themselves every 30 s for 3 minutes.
 - **Plain lyrics** — when only untimed words exist, they're spread over the song with estimated timing, ready
