@@ -239,6 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ("aurora", "Aurora"), ("black", "Black"),
         ], #selector(pickBackground(_:))))
         menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics")], #selector(pickLayout(_:))))
+        menu.addItem(item("Always Use This Preset for This Song", #selector(pinSong)))
+        menu.addItem(item("Always Use This Preset for This Artist", #selector(pinArtist)))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(timingMenu())
@@ -358,6 +360,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(pickLayout(_:)): style.v.stageLayout,
         ]
         if menu.items.contains(where: { $0.action == #selector(savePreset) }) { fillPresets(menu) }
+        for item in menu.items where item.action == #selector(pinSong) || item.action == #selector(pinArtist) {
+            item.state = PresetMemory.shared.isPinned(player.track, artist: item.action == #selector(pinArtist)) ? .on : .off
+        }
         for item in menu.items {
             if item.action == #selector(pickPreset(_:)) {
                 item.state = (item.representedObject as? StyleValues) == style.v ? .on : .off
@@ -373,6 +378,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleDesktop() { style.v.showOnDesktop.toggle() }
     @objc private func previewStage() { preview() }
     @objc private func reloadLyrics() { player.reloadLyrics() }
+    @objc private func pinSong() { PresetMemory.shared.togglePin(player.track, artist: false) }
+    @objc private func pinArtist() { PresetMemory.shared.togglePin(player.track, artist: true) }
 
     // MARK: This song's timing
 

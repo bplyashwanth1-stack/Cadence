@@ -206,16 +206,41 @@ enum LRCLib {
     /// the composer in another), NetEase, and finally the plain words. Returns nil when the song has none of these;
     /// throws when a source couldn't be asked, so a busy server isn't mistaken for a song without lyrics.
     static func lyrics(for track: Track) async throws -> Found? {
-        async let exactReply = request("get", [
-            "track_name": track.title, "artist_name": track.artist,
-            "album_name": track.album, "duration": String(Int(track.duration.rounded())),
-        ])
-        // Search with "- Remastered", "(feat. …)" etc. stripped.
-        async let searchReply = request("search", ["track_name": clean(track.title), "artist_name": track.artist])
-        let (exact, search) = await (exactReply, searchReply)
+        // Both at once. The search usually has the most uploads to compare, but once either has good lyrics the song
+        // only waits a moment for the other: LRCLIB is often overloaded, and one slow request shouldn't hold it up.
+        var searched: Reply = .missing
         var items: [Item] = []
-        if case .found(let data) = exact, let item = try? JSONDecoder().decode(Item.self, from: data) { items.append(item) }
-        if case .found(let data) = search, let found = try? JSONDecoder().decode([Item].self, from: data) { items += found }
+        await withTaskGroup(of: (exact: Bool, reply: Reply?).self) { group in
+            group.addTask { await (true, request("get", [
+                "track_name": track.title, "artist_name": track.artist,
+                "album_name": track.album, "duration": String(Int(track.duration.rounded())),
+            ])) }
+            // Search with "- Remastered", "(feat. …)" etc. stripped.
+            group.addTask { await (false, request("search", ["track_name": clean(track.title), "artist_name": track.artist])) }
+            var waiting = 2
+            var hurrying = false
+            while waiting > 0, let (exact, reply) = await group.next() {
+                guard let reply else { break }  // the moment is up
+                waiting -= 1
+                if !exact { searched = reply }
+                if case .found(let data) = reply {
+                    if exact, let item = try? JSONDecoder().decode(Item.self, from: data) { items.append(item) }
+                    if !exact, let found = try? JSONDecoder().decode([Item].self, from: data) { items += found }
+                }
+                // A search that answered is enough to go on: the exact lookup often just returns 503 for a song
+                // LRCLIB doesn't have.
+                var answered = false
+                if !exact, case .found = reply { answered = true }
+                if !hurrying, answered || best(items, for: track) != nil {
+                    hurrying = true
+                    group.addTask {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        return (false, nil)
+                    }
+                }
+            }
+            group.cancelAll()
+        }
         if let lrc = best(items, for: track) { return .timed(lrc) }
 
         // Both at once, so a busy LRCLIB's retries don't hold up the answer NetEase may already have.
@@ -237,8 +262,8 @@ enum LRCLib {
             .plainLyrics
         if let plain { return .plain(plain) }
 
-        // "Nothing found" needs every source to have really answered.
-        for reply in [exact, search, wide] {
+        // "Nothing found" needs the searches to have really answered.
+        for reply in [searched, wide] {
             if case .failed(let reason) = reply { throw Unavailable(reason: reason) }
         }
         if let failure = backup.failure { throw Unavailable(reason: failure) }
@@ -361,8 +386,8 @@ enum LRCLib {
     /// sitting on "Searching lyrics…".
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 15
+        config.timeoutIntervalForRequest = 6
+        config.timeoutIntervalForResource = 8
         return URLSession(configuration: config)
     }()
 
@@ -378,12 +403,18 @@ enum LRCLib {
         let path = request.url?.lastPathComponent ?? ""
         var attempt = 1
         while true {
+            if Task.isCancelled { return .failed("\(path): cancelled") }
             let data: Data, response: HTTPURLResponse?
             do {
                 let result = try await session.data(for: request)
                 (data, response) = (result.0, result.1 as? HTTPURLResponse)
             } catch {
-                return .failed("\(path): \(error.localizedDescription)")
+                // A stalled connection often works on a fresh one, so it gets one more go.
+                guard (error as? URLError)?.code == .timedOut, attempt < 2 else {
+                    return .failed("\(path): \(error.localizedDescription)")
+                }
+                attempt += 1
+                continue
             }
             switch response?.statusCode {
             case 200:
@@ -391,10 +422,12 @@ enum LRCLib {
             case 404:
                 return .missing
             case 429, 503:
-                // LRCLIB sheds load with a 503 and a Retry-After of a second or so.
-                guard attempt < 3 else { return .failed("\(path): HTTP \(response?.statusCode ?? 0)") }
-                let wait = Double(response?.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 1
-                try? await Task.sleep(nanoseconds: UInt64(min(max(wait, 0.5), 3) * 1e9))
+                // LRCLIB sheds load with a 503 and a Retry-After of a second or so. The wait grows and varies a
+                // little, so parallel requests don't all come back at the same instant.
+                guard attempt < 5 else { return .failed("\(path): HTTP \(response?.statusCode ?? 0)") }
+                let asked = Double(response?.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 1
+                let wait = min(max(asked, 0.5) * (0.6 + 0.4 * Double(attempt)), 3) + Double.random(in: 0...0.4)
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
                 attempt += 1
             default:
                 return .failed("\(path): HTTP \(response?.statusCode ?? 0)")
@@ -742,6 +775,7 @@ final class NowPlaying: ObservableObject {
 
     private func trackChanged(_ track: Track) {
         self.track = track
+        PresetMemory.shared.songChanged(track)
         loadLyrics(track)
         loadArtwork(track)
     }

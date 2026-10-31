@@ -409,16 +409,26 @@ enum Presets {
 }
 
 extension Presets {
-    /// Every preset in menu order — built-in first, then the user's — as (name, symbol, values).
+    /// Every preset in menu order — favourites, then built-in, then the user's — as (name, symbol, values).
     static func all(keeping current: StyleValues) -> [(name: String, symbol: String, values: StyleValues)] {
-        builtIn.map { ($0.name, $0.symbol, $0.values(keeping: current)) }
+        let list = builtIn.map { ($0.name, $0.symbol, $0.values(keeping: current)) }
             + PresetStore.shared.custom.map { ($0.name, "star.fill", $0.values(keeping: current)) }
+        let favourites = PresetMemory.shared.favourites
+        return list.filter { favourites.contains($0.0) } + list.filter { !favourites.contains($0.0) }
+    }
+
+    /// The name of the preset the current look matches, if any.
+    static func current() -> String? {
+        all(keeping: Style.shared.v).first { $0.values == Style.shared.v }?.name
     }
 
     /// Steps through the presets (from the first or last, if the current look isn't a preset) and flashes the
-    /// name — for the lock screen, where there's no menu bar.
+    /// name — for the lock screen, where there's no menu bar. With favourites set, it stays among those.
     static func step(_ by: Int) {
-        let list = all(keeping: Style.shared.v)
+        let favourites = PresetMemory.shared.favourites
+        let everything = all(keeping: Style.shared.v)
+        let chosen = everything.filter { favourites.contains($0.name) }
+        let list = chosen.isEmpty ? everything : chosen
         let current = list.firstIndex { $0.values == Style.shared.v }
         let index = current.map { ($0 + by + list.count) % list.count } ?? (by > 0 ? 0 : list.count - 1)
         pick(list[index].name, list[index].symbol, list[index].values)
@@ -427,6 +437,77 @@ extension Presets {
     static func pick(_ name: String, _ symbol: String, _ values: StyleValues) {
         Style.shared.v = values
         PresetToast.shared.show(name, symbol)
+    }
+}
+
+/// Favourite presets, and which preset to use for a particular song or artist.
+final class PresetMemory: ObservableObject {
+    static let shared = PresetMemory()
+
+    @Published private(set) var favourites: Set<String> {
+        didSet { UserDefaults.standard.set(Array(favourites), forKey: "favouritePresets") }
+    }
+    @Published private(set) var rules: [String: String] {  // "song:<id>" or "artist:<name>" → preset name
+        didSet { UserDefaults.standard.set(rules, forKey: "presetRules") }
+    }
+    private var usual: StyleValues?  // the look to go back to after a song with its own preset
+    private var applied: StyleValues?
+
+    private init() {
+        favourites = Set(UserDefaults.standard.stringArray(forKey: "favouritePresets") ?? [])
+        rules = UserDefaults.standard.dictionary(forKey: "presetRules") as? [String: String] ?? [:]
+    }
+
+    func toggleFavourite(_ name: String) {
+        if favourites.contains(name) { favourites.remove(name) } else { favourites.insert(name) }
+    }
+
+    private func songKey(_ track: Track) -> String { "song:" + track.id }
+
+    private func artistKey(_ track: Track) -> String {
+        let first = track.artist.components(separatedBy: CharacterSet(charactersIn: ",&")).first ?? track.artist
+        return "artist:" + first.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// The song's own preset wins over the artist's.
+    func rule(for track: Track) -> String? { rules[songKey(track)] ?? rules[artistKey(track)] }
+
+    func isPinned(_ track: Track?, artist: Bool) -> Bool {
+        guard let track else { return false }
+        return rules[artist ? artistKey(track) : songKey(track)] != nil
+    }
+
+    /// Pins the current preset to the song or artist, or unpins it.
+    func togglePin(_ track: Track?, artist: Bool) {
+        guard let track else { return }
+        let key = artist ? artistKey(track) : songKey(track)
+        if rules[key] != nil {
+            rules[key] = nil
+        } else if let name = Presets.current() {
+            rules[key] = name
+            // This look now belongs to the pin, so the next ordinary song goes back to the usual one.
+            if usual == nil { usual = Style.shared.v }
+            applied = Style.shared.v
+        }
+    }
+
+    func songChanged(_ track: Track) {
+        let style = Style.shared
+        // Picking a different look by hand during a pinned song makes that the usual look from now on.
+        if let applied, style.v != applied {
+            usual = nil
+            self.applied = nil
+        }
+        if let name = rule(for: track),
+           let preset = Presets.all(keeping: style.v).first(where: { $0.name == name }) {
+            if usual == nil { usual = style.v }
+            if preset.values != style.v { style.v = preset.values }
+            applied = preset.values
+        } else if let usual {
+            style.v = usual.keepingSystemSettings(from: style.v)
+            self.usual = nil
+            applied = nil
+        }
     }
 }
 
@@ -507,6 +588,7 @@ final class PresetStore: ObservableObject {
 struct PresetPicker: View {
     @ObservedObject private var style = Style.shared
     @ObservedObject private var store = PresetStore.shared
+    @ObservedObject private var memory = PresetMemory.shared
     @State private var newName = ""
 
     var body: some View {
@@ -541,6 +623,7 @@ struct PresetPicker: View {
 
     private func card(_ name: String, _ symbol: String, _ blurb: String, _ values: StyleValues) -> some View {
         let selected = style.v == values
+        let favourite = memory.favourites.contains(name)
         return Button { style.v = values } label: {
             VStack(alignment: .leading, spacing: 4) {
                 Image(systemName: symbol).font(.title3)
@@ -555,5 +638,13 @@ struct PresetPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) {
+            Button { memory.toggleFavourite(name) } label: {
+                Image(systemName: favourite ? "heart.fill" : "heart").foregroundStyle(favourite ? Color.pink : .secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+            .help("Favourite")
+        }
     }
 }

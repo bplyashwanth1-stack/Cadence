@@ -31,6 +31,8 @@ over a moving wallpaper made from the album art that hits on the beat.
 Love Letter, Glitchcore, Movie Subs, Galaxy, Highlighter, Sad Hours, Golden Hour, Y2K,
 Polaroid Days, Mixtape, Moonlit, Late Show, Synthwave, Snow Globe, Monsoon, Sakura, Festival, Bubblegum, Stadium,
 Ripple), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
+Heart your favourites to put them first and keep the arrows among them, and pin a preset to a song or artist
+to have it come back whenever they play.
 
 **Getting the lyrics right**
 - Lyrics come from [LRCLIB](https://lrclib.net) (free, no account). Uploads are user-submitted, so Cadence

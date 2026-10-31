@@ -187,6 +187,8 @@ struct NowPlayingBar: View {
 struct PresetList: View {
     @ObservedObject private var style = Style.shared
     @ObservedObject private var hover = HoverState.shared
+    @ObservedObject private var memory = PresetMemory.shared
+    @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let list = Presets.all(keeping: style.v)
@@ -205,6 +207,14 @@ struct PresetList: View {
                     scroller.scrollTo(current.name, anchor: .center)
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 6) {
+                    pin("This song", artist: false)
+                    pin("This artist", artist: true)
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.35))
+            }
         }
         .frame(width: 270, height: ControlsWindow.listHeight)
         .background {
@@ -217,27 +227,55 @@ struct PresetList: View {
         .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
     }
 
-    private func row(_ name: String, _ symbol: String, _ values: StyleValues) -> some View {
-        let selected = values == style.v
-        return Button {
-            Presets.pick(name, symbol, values)
-            hover.presetsOpen = false
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol).frame(width: 22)
-                Text(name).lineLimit(1)
-                Spacer(minLength: 0)
-                if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(selected ? 0.16 : 0)))
-            .contentShape(Rectangle())
+    /// Keeps the current preset for this song or artist, so it comes back whenever they play.
+    private func pin(_ label: String, artist: Bool) -> some View {
+        let pinned = memory.isPinned(player.track, artist: artist)
+        return Button { memory.togglePin(player.track, artist: artist) } label: {
+            Label(label, systemImage: pinned ? "pin.fill" : "pin")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(pinned ? 0.28 : 0.1)))
+                .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
+        .help("Always use this preset for \(label.lowercased())")
+    }
+
+    private func row(_ name: String, _ symbol: String, _ values: StyleValues) -> some View {
+        let selected = values == style.v
+        let favourite = memory.favourites.contains(name)
+        return HStack(spacing: 0) {
+            Button {
+                Presets.pick(name, symbol, values)
+                hover.presetsOpen = false
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: symbol).frame(width: 22)
+                    Text(name).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
+                }
+                .padding(.leading, 12)
+                .frame(height: 38)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+            Button { memory.toggleFavourite(name) } label: {
+                Image(systemName: favourite ? "heart.fill" : "heart")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(favourite ? Color.pink : Color.white.opacity(0.45))
+                    .frame(width: 36, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+        }
+        .font(.system(size: 15, weight: .semibold, design: .rounded))
+        .foregroundStyle(Color.white)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color.white.opacity(selected ? 0.16 : 0)))
     }
 }
 
