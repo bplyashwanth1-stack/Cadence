@@ -303,7 +303,9 @@ enum LRCLib {
             if case .failed(let reason) = reply { return (nil, "NetEase \(reason)") }
             return (nil, nil)
         }
-        for song in netEaseMatches(data, track).prefix(3) {
+        let matches = netEaseMatches(data, track)
+        if matches.isEmpty { Log.write("NetEase has no match for \(track.title) (\(data.count) bytes back)") }
+        for song in matches.prefix(3) {
             var lyric = URLComponents(string: "https://music.163.com/api/song/lyric")!
             lyric.queryItems = [URLQueryItem(name: "id", value: String(song.id)), URLQueryItem(name: "lv", value: "1")]
             if case .found(let data) = await fetch(netEaseRequest(lyric.url!)),
@@ -411,7 +413,8 @@ enum LRCLib {
     /// The shared session waits 60 s on a stalled server and has no overall limit, which leaves the song
     /// sitting on "Searching lyrics…".
     private static let session: URLSession = {
-        let config = URLSessionConfiguration.default
+        // No cookies or cache: NetEase hands out cookies and then stops answering a session that keeps them.
+        let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 6
         config.timeoutIntervalForResource = 8
         return URLSession(configuration: config)
@@ -447,7 +450,7 @@ enum LRCLib {
                 return .found(data)
             case 404:
                 return .missing
-            case 429, 503:
+            case 429, 500, 502, 503, 504:
                 // LRCLIB sheds load with a 503 and a Retry-After of a second or so. The wait grows and varies a
                 // little, so parallel requests don't all come back at the same instant.
                 guard attempt < 5 else { return .failed("\(path): HTTP \(response?.statusCode ?? 0)") }
