@@ -37,6 +37,28 @@ final class StageWindow: NSWindow {
     }
 }
 
+/// The edge light around the desktop (off unless enabled). Never takes clicks.
+final class EdgeGlowWindow: NSPanel {
+    init(screen: NSScreen) {
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        setFrame(screen.frame, display: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        ignoresMouseEvents = true
+        isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        level = overlayLevel
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        let hosting = NSHostingView(rootView: DesktopEdgeGlow())
+        hosting.sizingOptions = []
+        contentView = hosting
+        orderFrontRegardless()
+    }
+
+    override var canBecomeKey: Bool { false }
+}
+
 /// Floating lyrics on the desktop (off unless enabled).
 final class OverlayWindow: NSPanel {
     init() {
@@ -65,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var stage: StageWindow?
     private var controls: ControlsWindow?
     private var overlay: OverlayWindow?
+    private var edgeGlow: EdgeGlowWindow?
     private var settings: NSWindow?
     private var statusItem: NSStatusItem!
     private var timer: Timer?
@@ -160,7 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func buildWindows() {
         stage?.close()
         controls?.close()
+        edgeGlow?.close()
         if let screen = NSScreen.screens.first {
+            edgeGlow = EdgeGlowWindow(screen: screen)
             stage = StageWindow(screen: screen)
             controls = ControlsWindow(screen: screen)  // created after the stage so it sits on top
             controls?.ignoresMouseEvents = !(style.v.stageFooter && player.stageVisible(style.v))
@@ -233,13 +258,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(choiceMenu("Lyric Animation", [("mix", "Mix — changes every line")] + StyleValues.wordEffects,
                                 #selector(pickWordStyle(_:))))
         menu.addItem(choiceMenu("Background", [
-            ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("cover", "Floating cover"),
+            ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("mono", "Black & White"), ("cover", "Floating cover"),
             ("disc", "Disc"), ("duotone", "Duotone"), ("vinyl", "Vinyl"), ("kaleido", "Kaleidoscope"),
             ("polaroid", "Polaroid"), ("cassette", "Cassette"), ("lake", "Moonlit Lake"), ("cinema", "Cinema"), ("retro", "Retro Grid"),
         ] + WorldScene.kinds.map { ($0.tag, $0.name.components(separatedBy: " — ")[0]) } + [
             ("aurora", "Aurora"), ("black", "Black"),
         ], #selector(pickBackground(_:))))
-        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics")], #selector(pickLayout(_:))))
+        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics"), ("constellation", "Constellation — words joined like stars"), ("fisheye", "Fisheye — a word stack under a glass lens"), ("fisheyevisual", "Fisheye Visual — the lens, with icons")], #selector(pickLayout(_:))))
         menu.addItem(item("Always Use This Preset for This Song", #selector(pinSong)))
         menu.addItem(item("Always Use This Preset for This Artist", #selector(pinArtist)))
         menu.addItem(.separator())

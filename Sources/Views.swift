@@ -560,31 +560,60 @@ struct StageBackground: View {
     }
 }
 
-/// Lumn-style rim light: two streaks of album colour racing around the screen edge at a steady brightness.
-/// The beat pushes them along rather than flashing them.
+/// Lumn-style rim light, either two streaks racing around the screen edge at a steady brightness, or one light
+/// all the way round that swells with the beat. With Move with the music off, both hold steady.
 struct EdgeGlow: View {
     let time: Double
     let date: Date
+    @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
-        let first = Color(nsColor: player.palette[0])
-        let second = Color(nsColor: player.palette[1 % player.palette.count])
-        let _ = BeatClock.shared.update(date: date, time: time)
-        let spin = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9000) * 40
-            + BeatClock.shared.travel(at: date) * 14
+        let s = style.v
+        let (first, second) = s.edgeColors(player.palette)
+        let seconds = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9000)
         // Soft edges come from gradient fades rather than a blur, which is far cheaper per frame.
-        Rectangle()
-            .fill(AngularGradient(stops: [
-                .init(color: first.opacity(0), location: 0),
-                .init(color: first, location: 0.26),
-                .init(color: first.opacity(0), location: 0.31),
-                .init(color: second.opacity(0), location: 0.5),
-                .init(color: second, location: 0.76),
-                .init(color: second.opacity(0), location: 0.81),
-            ], center: .center, angle: .degrees(spin)))
-            .mask(EdgeFade(thickness: 70))
-            .opacity(0.85)
+        if s.edgeStyle == "rim" {
+            let kick = s.edgeBeat ? min(player.kick(at: time, date: date), 1) : 0
+            // Brightness wanders slowly around the edge, so it reads as light rather than a drawn border.
+            Rectangle()
+                .fill(AngularGradient(colors: [first, first.opacity(0.5), second, second.opacity(0.5), first],
+                                      center: .center, angle: .degrees(seconds * 6)))
+                .mask(EdgeFade(thickness: s.edgeThickness * (1 + 0.35 * kick)))
+                .opacity(s.edgeBrightness * (s.edgeBeat ? 0.7 + 0.3 * kick : 1))
+        } else {
+            let _ = BeatClock.shared.update(date: date, time: time)
+            let spin = seconds * 40 + (s.edgeBeat ? BeatClock.shared.travel(at: date) * 14 : 0)
+            Rectangle()
+                .fill(AngularGradient(stops: [
+                    .init(color: first.opacity(0), location: 0),
+                    .init(color: first, location: 0.26),
+                    .init(color: first.opacity(0), location: 0.31),
+                    .init(color: second.opacity(0), location: 0.5),
+                    .init(color: second, location: 0.76),
+                    .init(color: second.opacity(0), location: 0.81),
+                ], center: .center, angle: .degrees(spin)))
+                .mask(EdgeFade(thickness: s.edgeThickness))
+                .opacity(s.edgeBrightness)
+        }
+    }
+}
+
+/// The edge light around the desktop while music plays, for when the Mac isn't locked.
+struct DesktopEdgeGlow: View {
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var power = Power.shared
+    @ObservedObject private var player = NowPlaying.shared
+
+    var body: some View {
+        let s = style.v
+        let visible = s.edgeGlow && s.edgeDesktop && player.isPlaying && !player.locked && !player.previewing
+        TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
+            if visible { EdgeGlow(time: player.lyricTime(at: context.date), date: context.date) }
+        }
+        .allowsHitTesting(false)
+        .opacity(visible ? 1 : 0)
+        .animation(.easeInOut(duration: 0.6), value: visible)
     }
 }
 
@@ -721,6 +750,12 @@ struct StageView: View {
                         ReelLyricsView(time: time, date: context.date)
                     } else if s.stageLayout == "stack" {
                         WordStackView(time: time, date: context.date)
+                    } else if s.stageLayout == "fisheye" || s.stageLayout == "fisheyevisual" {
+                        FisheyeView(time: time, date: context.date, icons: s.stageLayout == "fisheyevisual")
+                            .layoutPriority(1)
+                    } else if s.stageLayout == "constellation" {
+                        // Takes all the room between the clock and the bar, not an equal share with the spacers.
+                        ConstellationView(time: time, date: context.date).layoutPriority(1)
                     } else {
                         LyricsView(time: time)
                     }

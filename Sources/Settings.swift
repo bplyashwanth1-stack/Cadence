@@ -103,8 +103,10 @@ struct SettingsView: View {
                 Text("Word stack").tag("stack")
                 Text("Lines").tag("lines")
                 Text("Reel").tag("reel")
+                Text("Constellation").tag("constellation")
+                Text("Fisheye").tag("fisheye")
+                Text("Fisheye Visual").tag("fisheyevisual")
             }
-            .pickerStyle(.segmented)
             if style.v.stageLayout == "stack" {
                 Picker("Word being sung", selection: $style.v.stackStyle) {
                     Text("Word effect (from Animation below)").tag("effect")
@@ -113,9 +115,13 @@ struct SettingsView: View {
                 Toggle("Icons beside words", isOn: $style.v.stageIcons)
                 Toggle("3D drift", isOn: $style.v.stageDrift)
             }
+            if style.v.stageLayout == "constellation" {
+                Toggle("Stars drift", isOn: $style.v.stageDrift)
+            }
             Picker("Background", selection: $style.v.stageBackground) {
                 Text("Auto — cuts between scenes, harder on the chorus").tag("auto")
                 Text("Motion wallpaper — artwork drifts and kicks").tag("motion")
+                Text("Black & white — the artwork in high-contrast mono").tag("mono")
                 Text("Floating cover — artwork tilting in 3D").tag("cover")
                 Text("Disc — spinning disc with a visualizer ring").tag("disc")
                 Text("Duotone — artwork in two album colors").tag("duotone")
@@ -149,11 +155,11 @@ struct SettingsView: View {
             if StyleValues.wallpapers.contains(style.v.stageBackground) {
                 slider("Motion", $style.v.motion, 0...1) { String(format: "%.0f%%", $0 * 100) }
                 Toggle("Kick on the beat", isOn: $style.v.beatZoom)
-                Toggle("Artist in front of the clock (motion and duotone scenes)", isOn: $style.v.depth)
+                Toggle("Artist in front of the clock (motion, mono and duotone scenes)", isOn: $style.v.depth)
                 if style.v.depth {
                     Toggle("…and in front of the lyrics (can hide words)", isOn: $style.v.depthOverLyrics)
                 }
-                if ["motion", "duotone"].contains(style.v.stageBackground) {
+                if ["motion", "mono", "duotone"].contains(style.v.stageBackground) {
                     Toggle("RGB split", isOn: $style.v.rgbSplit)
                 }
             }
@@ -187,7 +193,30 @@ struct SettingsView: View {
                 Text("Road sign").tag("sign")
             }
             slider("Lyrics size", $style.v.stageFontSize, 60...300) { String(format: "%.0f pt", $0) }
-            Toggle("Edge glow (pulses with the vocals)", isOn: $style.v.edgeGlow)
+            Toggle("Edge glow", isOn: $style.v.edgeGlow)
+            if style.v.edgeGlow {
+                Picker("Edge light", selection: $style.v.edgeStyle) {
+                    Text("Racing streaks").tag("race")
+                    Text("Full rim").tag("rim")
+                }
+                .pickerStyle(.segmented)
+                Picker("Edge colour", selection: $style.v.edgeColor) {
+                    Text("Album art").tag("album")
+                    Text("White").tag("white")
+                    Text("Custom").tag("custom")
+                }
+                .pickerStyle(.segmented)
+                if style.v.edgeColor == "custom" {
+                    ColorPicker("Edge light colour", selection: Binding(
+                        get: { Color(hex: style.v.edgeHex) },
+                        set: { style.v.edgeHex = $0.hex }
+                    ), supportsOpacity: false)
+                }
+                slider("Thickness", $style.v.edgeThickness, 10...220) { String(format: "%.0f pt", $0) }
+                slider("Brightness", $style.v.edgeBrightness, 0.1...1) { String(format: "%.0f%%", $0 * 100) }
+                Toggle("Move with the music", isOn: $style.v.edgeBeat)
+                Toggle("Also on the desktop while music plays", isOn: $style.v.edgeDesktop)
+            }
             Toggle("Clock", isOn: $style.v.stageClock)
             Toggle("Title card when a song starts", isOn: $style.v.titleCard)
             Toggle("Now-playing bar (hover for controls)", isOn: $style.v.stageFooter)

@@ -31,11 +31,11 @@ struct StyleValues: Codable, Equatable {
 
     // Lock screen
     var showOnLockScreen = true
-    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines, reel (poster motion graphics)
+    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines, reel (poster motion graphics), constellation, fisheye, fisheyevisual
     var stageFontSize = 150.0
     var stageIcons = true
     var stageDrift = true
-    var stageBackground = "auto"  // auto, motion, cover, disc, duotone, vinyl, kaleido, polaroid, cassette, lake, cinema, retro, the WorldScene kinds, aurora, album, gradient, custom, black
+    var stageBackground = "auto"  // auto, motion, mono, cover, disc, duotone, vinyl, kaleido, polaroid, cassette, lake, cinema, retro, the WorldScene kinds, aurora, album, gradient, custom, black
     var audioReactive = true
     var depth = true  // the artist cut out of the artwork stands in front of the clock
     var depthOverLyrics = false  // …and in front of the lyrics too (can hide the word being sung)
@@ -59,6 +59,13 @@ struct StyleValues: Codable, Equatable {
     var stackStyle = "effect"  // effect (the chosen word effect), box (highlighter)
     var stageHex = "#14141A"
     var edgeGlow = true
+    var edgeStyle = "race"  // race (two streaks circling), rim (a steady light all the way round)
+    var edgeColor = "album"  // album, white, custom
+    var edgeHex = "#FFFFFF"
+    var edgeThickness = 70.0
+    var edgeBrightness = 0.85
+    var edgeBeat = true  // moves with the music; off holds it still
+    var edgeDesktop = false  // also light the screen edge on the desktop while music plays
     var stageFooter = true
     var stageClock = true
     var keepAwake = true
@@ -87,9 +94,7 @@ final class Style: ObservableObject {
     private init() {
         if let data = UserDefaults.standard.data(forKey: "style"),
            let saved = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let defaults = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(StyleValues())) as? [String: Any],
-           let merged = try? JSONSerialization.data(withJSONObject: defaults.merging(saved) { $1 }),
-           let values = try? JSONDecoder().decode(StyleValues.self, from: merged) {
+           let values = StyleValues.overDefaults(saved) {
             v = values.withoutRetiredBackground()
         } else {
             v = StyleValues()
@@ -98,6 +103,13 @@ final class Style: ObservableObject {
 }
 
 extension StyleValues {
+    /// Saved settings laid over the defaults, so settings newer than the save still decode.
+    static func overDefaults(_ saved: [String: Any]) -> StyleValues? {
+        guard let defaults = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(StyleValues())) as? [String: Any],
+              let merged = try? JSONSerialization.data(withJSONObject: defaults.merging(saved) { $1 }) else { return nil }
+        return try? JSONDecoder().decode(StyleValues.self, from: merged)
+    }
+
     /// Backgrounds made from the artwork itself (see Wallpaper.swift).
     /// A lyric word as shown: in English letters when romanizing, and in caps when asked.
     func display(_ text: String) -> String {
@@ -165,7 +177,7 @@ extension StyleValues {
         return Self.transitionMix[Int(noise(line, 32) * Double(Self.transitionMix.count))]
     }
 
-    static let wallpapers: Set<String> = ["auto", "motion", "cover", "disc", "duotone", "vinyl", "kaleido",
+    static let wallpapers: Set<String> = ["auto", "motion", "mono", "cover", "disc", "duotone", "vinyl", "kaleido",
                                           "polaroid", "cassette", "lake", "cinema", "retro",
                                           "gallery", "billboard", "crt", "galaxy", "ocean", "mountains", "highway", "neonwall", "aquarium", "forest", "coderain", "newspaper"]
 
@@ -233,6 +245,15 @@ extension StyleValues {
         if colorMode == "custom" { return AnyShapeStyle(Color(hex: customHex)) }
         let colors = palette.map { Color(nsColor: $0.blended(withFraction: 0.2, of: .white) ?? $0) }
         return AnyShapeStyle(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
+    }
+
+    /// The two colours of the edge light.
+    func edgeColors(_ palette: [NSColor]) -> (Color, Color) {
+        switch edgeColor {
+        case "white": return (.white, .white)
+        case "custom": return (Color(hex: edgeHex), Color(hex: edgeHex))
+        default: return (Color(nsColor: palette[0]), Color(nsColor: palette[1 % palette.count]))
+        }
     }
 
     func glowColor(_ palette: [NSColor], onStage: Bool) -> Color {

@@ -22,10 +22,14 @@ struct WallpaperBackground: View {
         // Each new line punches in a little; a scene cut punches in hard.
         let pulse = min(1.4, kick + 0.35 * direction.line + direction.cut)
         if foreground {
-            let cutout = direction.scene == "duotone" ? player.duotoneCutout : direction.scene == "motion" ? player.cutout : nil
+            let mono = direction.scene == "mono"
+            let cutout = direction.scene == "duotone" ? player.duotoneCutout
+                : direction.scene == "motion" || mono ? player.cutout : nil
             if s.depth, let cutout {
                 GeometryReader { geo in
                     kenBurnsImage(intensified(s, direction.chorus), cutout, geo.size, t, pulse)
+                        .saturation(mono ? 0 : 1)
+                        .contrast(mono ? Self.monoContrast : 1)
                         // Same shading the background gets from its darkening layer.
                         .colorMultiply(Color(white: 1 - (0.1 + s.backgroundDarkness * 0.65)))
                 }
@@ -60,6 +64,7 @@ struct WallpaperBackground: View {
         }
     }
 
+    private static let monoContrast = 1.2
     private static let autoScenes = ["motion", "cover", "disc", "kaleido", "duotone", "vinyl"]
 
     /// Which scene to show and how hard to hit. Auto lets the SceneDirector cut on the beat; the chorus goes harder.
@@ -91,6 +96,7 @@ struct WallpaperBackground: View {
     private func scene(_ name: String, _ s: StyleValues, _ art: NSImage, _ size: CGSize, _ t: Double,
                        _ pulse: Double) -> some View {
         switch name {
+        case "mono": kenBurns(s, art, size, t, pulse).saturation(0).contrast(Self.monoContrast)
         case "cover": cover(s, art, size, t, pulse)
         case "disc": disc(s, art, size, t, pulse)
         case "duotone": kenBurns(s, player.duotone ?? art, size, t, pulse)

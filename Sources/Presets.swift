@@ -35,6 +35,7 @@ extension StyleValues {
         v.learnTiming = c.learnTiming
         v.batterySaver = c.batterySaver
         v.showOnDesktop = c.showOnDesktop
+        v.edgeDesktop = c.edgeDesktop
         v.fontSize = c.fontSize
         v.width = c.width
         v.background = c.background
@@ -50,6 +51,40 @@ enum Presets {
     /// Looks borrowed from lyric edits on reels.
     static let builtIn: [Preset] = [
         Preset(name: "Reel Edit", symbol: "scissors", blurb: "Cuts on the beat, a new effect every line") { _ in },
+        Preset(name: "Late Night", symbol: "sparkles", blurb: "Mono cover, constellation lyrics, white rim light") { v in
+            v.stageLayout = "constellation"
+            v.stageBackground = "mono"
+            v.colorMode = "white"
+            v.fontFamily = "Manrope"
+            v.fontWeight = "bold"
+            v.keywordBursts = false
+            v.backgroundDarkness = 0.75
+            v.motion = 0.25
+            v.edgeStyle = "rim"
+            v.edgeColor = "white"
+            v.edgeThickness = 48
+            v.edgeBrightness = 0.9
+        },
+        Preset(name: "Fisheye", symbol: "circle.circle.fill", blurb: "Words rolling under a glass lens") { v in
+            v.stageLayout = "fisheye"
+            v.stageBackground = "mono"
+            v.colorMode = "white"
+            v.fontFamily = "Manrope"
+            v.fontWeight = "bold"
+            v.keywordBursts = false
+            v.backgroundDarkness = 0.75
+            v.motion = 0.25
+        },
+        Preset(name: "Fisheye Visual", symbol: "eye.circle.fill", blurb: "The glass lens, with icons beside the words") { v in
+            v.stageLayout = "fisheyevisual"
+            v.stageBackground = "mono"
+            v.colorMode = "white"
+            v.fontFamily = "Manrope"
+            v.fontWeight = "bold"
+            v.keywordBursts = false
+            v.backgroundDarkness = 0.75
+            v.motion = 0.25
+        },
         Preset(name: "Night Drive", symbol: "moon.stars.fill", blurb: "Spinning vinyl, neon words, stars") { v in
             v.stageBackground = "vinyl"
             v.wordStyle = "neon"
@@ -900,9 +935,14 @@ final class PresetStore: ObservableObject {
     }
 
     private init() {
+        // Laid over the defaults, so a setting added since a preset was saved doesn't lose the preset.
         let data = UserDefaults.standard.data(forKey: "presets")
-        custom = (data.flatMap { try? JSONDecoder().decode([CustomPreset].self, from: $0) } ?? [])
-            .map { CustomPreset(name: $0.name, values: $0.values.withoutRetiredBackground()) }
+        let saved = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
+        custom = saved.compactMap { item in
+            guard let name = item["name"] as? String, let values = item["values"] as? [String: Any],
+                  let merged = StyleValues.overDefaults(values) else { return nil }
+            return CustomPreset(name: name, values: merged.withoutRetiredBackground())
+        }
     }
 
     func save(_ name: String, _ values: StyleValues) {

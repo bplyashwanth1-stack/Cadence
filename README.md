@@ -10,25 +10,29 @@ over a moving wallpaper made from the album art that hits on the beat.
 - **17 word animations** — comet, neon, glitch, slam, scramble, cascade, flip, highlighter, shine, reveal,
   bounce, bloom, typewriter, karaoke fill, wave, pop, fade — or **Mix**, a different one every line with the
   punchy ones saved for the chorus.
-- **Two layouts** — a word stack (one word at a time, drifting in 3D) or classic lines with 8 line transitions.
+- **Layouts** — a word stack (one word at a time, drifting in 3D), classic lines with 8 line transitions, or a
+  **constellation**, where sung words become stars joined up across the screen, or **fisheye**, a column of words
+  rolling under a glass lens, with or without icons.
 - **Keyword bursts** — sung words set off effects: "fire" throws up embers, "rain" brings a storm, "love"
   floats hearts, plus stars, lightning, money and snow. Works for Hindi and Telugu words too.
 - **Title card** — a new song's title slams in like a music video's opening.
 - **Hindi/Telugu in English letters**, spelled the way people type them ("premapichchi", not "premapicci").
 
 **Backgrounds**
-- **Album art, moving** — motion wallpaper, floating cover, duotone, spinning vinyl, kaleidoscope, polaroid, cassette, moonlit lake, cinema, retro grid, gallery, city billboard, old TV, deep space, ocean, mountains,
+- **Album art, moving** — motion wallpaper, high-contrast black & white, floating cover, duotone, spinning vinyl, kaleidoscope, polaroid, cassette, moonlit lake, cinema, retro grid, gallery, city billboard, old TV, deep space, ocean, mountains,
   highway, neon wall, aquarium, forest, code rain, front page, or a
   spinning disc ringed by a live spectrum.
 - **Auto** cuts between them like an editor: on the drop, on new sections, every few beats in the chorus.
 - **Hears the music** (Core Audio process tap): zooms, flashes and particles kick on the real beat.
 - **The artist stands in front of the clock** — the person is cut out of the art with Vision.
+- **Edge light** — racing streaks or a full rim around the screen, in album colours, white or your own, with
+  thickness and brightness controls. It can move with the music or hold still, and can run on the desktop too.
 - Particles (bokeh, stars, embers, dust, snow, rain, petals, fireflies, lanterns, comets, bubbles), light leaks,
   stage beams, VHS look, RGB split, edge glow, and a backing for readability.
 
 - **Reel lyrics** — poster type built word by word, with slams, rises, echoes, colour blocks and blackouts.
 
-**Presets** — fifty-one looks in one click (Fan Edit, Cinema Cut, Poster Drop, Reel Edit, Night Drive, Hype, Chill,
+**Presets** — fifty-four looks in one click (Fan Edit, Cinema Cut, Poster Drop, Reel Edit, Late Night, Fisheye, Fisheye Visual, Night Drive, Hype, Chill,
 Love Letter, Glitchcore, Movie Subs, Galaxy, Highlighter, Sad Hours, Golden Hour, Y2K,
 Polaroid Days, Mixtape, Moonlit, Late Show, Synthwave, Snow Globe, Monsoon, Sakura, Festival, Bubblegum, Stadium,
 Ripple, and 24 more, from Art Gallery to Zen Garden), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
@@ -107,6 +111,8 @@ rebuilds.
 | `Sources/WordStack.swift` | Word stack layout and word icons |
 | `Sources/Wallpaper.swift` | Artwork backgrounds, spectrum ring, particles, light leaks, lyrics backing |
 | `Sources/ReelLyrics.swift` | Poster lyrics: layout and motion graphics |
+| `Sources/Constellation.swift` | Constellation lyrics: sung words as joined-up stars |
+| `Sources/Fisheye.swift` | Fisheye lyrics and the lens |
 | `Sources/Stages.swift` | Staged covers (polaroid, cassette, lake, cinema, retro grid), stage beams, VHS look |
 | `Sources/Worlds.swift` | Twelve whole scenes for the cover, from gallery to front page |
 | `Sources/Learned.swift` | Learns a song's line and word timing from the audio |
