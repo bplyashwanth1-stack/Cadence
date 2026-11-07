@@ -11,6 +11,7 @@ struct WallpaperBackground: View {
     /// Draws only the cut-out subject of the artwork, lined up exactly with the background, so it can sit on top
     /// of the lyrics and the words pass behind the artist.
     var foreground = false
+    @Environment(\.stageScreen) private var screen
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
 
@@ -45,10 +46,14 @@ struct WallpaperBackground: View {
                     scene(direction.scene, intensified(s, direction.chorus), art, geo.size, t, pulse)
                         .id(direction.scene)
                         .transition(.opacity)
-                    Color.black.opacity(0.1 + s.backgroundDarkness * 0.65)
+                    // The generated visuals are made to be seen at full strength, so they're barely darkened.
+                    let visual = Visuals.tags.contains(direction.scene)
+                    // Paper-light scenes are meant to stay light.
+                    let light = ["silk", "ink", "contours", "clockwork"].contains(direction.scene)
+                    Color.black.opacity(light ? 0 : (0.1 + s.backgroundDarkness * 0.65) * (visual ? 0.25 : 1))
                     // White flash on a scene cut, like a hard edit.
                     Color.white.opacity(direction.cut * 0.35).blendMode(.plusLighter)
-                    RadialGradient(colors: [.clear, .black.opacity(0.7)], center: .center,
+                    RadialGradient(colors: [.clear, .black.opacity(light ? 0 : visual ? 0.35 : 0.7)], center: .center,
                                    startRadius: geo.size.height * 0.3, endRadius: geo.size.width * 0.75)
                     Image(nsImage: Grain.image)
                         .resizable(resizingMode: .tile)
@@ -65,6 +70,13 @@ struct WallpaperBackground: View {
     }
 
     private static let monoContrast = 1.2
+
+    /// Seconds since the last bass hit, or since the last sung word when the music can't be heard.
+    private var beatAge: Double {
+        if style.v.audioReactive, let audio = AudioPulse.shared.snapshot() { return date.timeIntervalSince(audio.lastBeat) }
+        guard let word = player.words.last(where: { $0.start <= time }) else { return 10 }
+        return time - word.start
+    }
     private static let autoScenes = ["motion", "cover", "disc", "kaleido", "duotone", "vinyl"]
 
     /// Which scene to show and how hard to hit. Auto lets the SceneDirector cut on the beat; the chorus goes harder.
@@ -74,6 +86,7 @@ struct WallpaperBackground: View {
         let index = lines.lastIndex(where: { $0.start <= time })
         let line = index.map { exp(-(time - lines[$0].start) * 5) } ?? 0
         let chorus = index.map(player.repeated.contains) ?? false
+        if let visual = Visuals.scene(chosen, time: time, date: date, screen: screen) { return (visual.tag, line, visual.cut, chorus) }
         guard chosen == "auto" else { return (chosen, line, 0, chorus) }
         let director = SceneDirector.shared
         director.update(date: date, section: (index ?? 0) / 4, chorus: chorus)
@@ -120,6 +133,10 @@ struct WallpaperBackground: View {
             }
         case "cinema": CinemaScene(art: art, size: size, t: t, palette: player.palette)
         case "retro": RetroGridScene(art: art, size: size, t: t, motion: s.motion, palette: player.palette)
+        case let kind where Visuals.tags.contains(kind):
+            VisualScene(kind: kind, art: art, size: size, t: t, motion: s.motion, kick: pulse,
+                        beatAge: beatAge, bands: s.audioReactive ? AudioPulse.shared.snapshot()?.bands ?? [] : [])
+                .hueRotation(s.tintVisuals ? Visuals.tint(kind, toward: player.palette) : .zero)
         case let kind where WorldScene.kinds.contains(where: { $0.tag == kind }):
             WorldScene(kind: kind, art: art, title: player.track?.title ?? "", artist: player.track?.artist ?? "",
                        size: size, t: t, motion: s.motion, palette: player.palette)

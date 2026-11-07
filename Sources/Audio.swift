@@ -47,6 +47,8 @@ final class AudioPulse {
     private var lastBeat = Date.distantPast
     private var levels: [(date: Date, level: Float)] = []  // singing band, every 20 ms, until collected
     private var lastLevel = Date.distantPast
+    private var lastCallback = Date.distantPast
+    private var startedAt = Date.distantPast
 
     private init() {
         ring = [Float](repeating: 0, count: fftSize)
@@ -62,6 +64,20 @@ final class AudioPulse {
         lock.lock(); defer { lock.unlock() }
         let now = Date()
         return now.timeIntervalSince(state.updated) < 0.5 && now.timeIntervalSince(state.lastSound) < 2 ? state : nil
+    }
+
+    /// Whether Cadence can hear what's playing, for the warning in the menu bar.
+    enum Health { case fine, notRunning, noAudio, silent }
+
+    func health() -> Health {
+        lock.lock(); defer { lock.unlock() }
+        let now = Date()
+        guard running, now.timeIntervalSince(startedAt) > 15 else { return running ? .fine : .notRunning }
+        // Started a while ago and Core Audio never delivered a single buffer: the tap is stuck.
+        if now.timeIntervalSince(lastCallback) > 5 { return .noAudio }
+        // Buffers arrive but hold nothing while music plays: usually the recording permission.
+        if now.timeIntervalSince(state.lastSound) > 15 { return .silent }
+        return .fine
     }
 
     /// The singing-band levels since the last call, for learning a song's timing.
@@ -171,6 +187,7 @@ final class AudioPulse {
         status = AudioDeviceStart(aggregateID, procID)
         guard status == noErr else { throw TapError(step: "start", status: status) }
         running = true
+        startedAt = Date()
         Log.write("audio tap running at \(sampleRate) Hz")
     }
 
@@ -206,6 +223,7 @@ final class AudioPulse {
     // MARK: Analysis
 
     private func process(_ input: UnsafePointer<AudioBufferList>) {
+        lock.lock(); lastCallback = Date(); lock.unlock()
         let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
         guard let first = buffers.first, let data = first.mData else { return }
         let channels = Int(max(first.mNumberChannels, 1))

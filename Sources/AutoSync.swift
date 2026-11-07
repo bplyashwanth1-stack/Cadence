@@ -28,6 +28,10 @@ final class AutoSync {
     private var trace: [(position: Double, level: Double)] = []
     private var heard: [LyricLine] = []  // the lyrics the trace belongs to
     private var learned = false
+    /// How much longer a video runs than the song in it (an intro, an outro, skits). The song can start anywhere
+    /// in that, so the search for the right shift reaches that much further back.
+    private var videoGap = 0.0
+    private var gapFor = ""
 
     func start() {
         guard timer == nil else { return }
@@ -107,8 +111,23 @@ final class AutoSync {
             trace.append((player.position(at: level.date), Double(level.level)))
         }
         if position > player.duration * 0.92 { learn(trackID) }
+        updateVideoGap()
 
         if tick % Int(rate * 4) == 0 { solve() }  // every 4 s
+    }
+
+    private func updateVideoGap() {
+        let player = NowPlaying.shared
+        guard let track = player.track, track.video else {
+            videoGap = 0
+            return
+        }
+        let key = "\(track.id)|\(player.lyrics.count)|\(player.lyrics.first?.start ?? 0)"
+        guard key != gapFor else { return }
+        gapFor = key
+        let length = LyricsStore.load(track.id).flatMap(LRC.length)
+        videoGap = length.map { min(max(track.duration - $0, 0), 180) } ?? 0
+        if videoGap > 4 { Log.write(String(format: "auto-sync: video runs %.0f s longer than the song", videoGap)) }
     }
 
     /// Lines up the moments singing starts (jumps in the vocal band) with the lines' start times, for every shift
@@ -116,7 +135,9 @@ final class AutoSync {
     /// sung spans instead was too blunt to notice even a 1.5 s error.
     private func solve() {
         guard samples.count >= Int(rate * 20) else { return }
-        let starts = NowPlaying.shared.lyrics.filter { !$0.words.isEmpty }.map(\.start)
+        let starts = NowPlaying.shared.lyrics.filter { !$0.words.isEmpty }.map(\.start).sorted()
+        // In a video the song can begin well after the video does: lyric time = video time - intro.
+        let lowest = videoGap > 4 ? -(videoGap + maxShift) : -maxShift
         let userOffset = Style.shared.v.offset
 
         // Vocal level smoothed over ~0.5 s; an onset is how much it rose over the last 0.2 s.
@@ -128,19 +149,33 @@ final class AutoSync {
         let onsets = smooth.indices.map { i in i >= 2 ? max(0, smooth[i] - smooth[i - 2]) : 0 }
         guard let vocal = standardised(onsets) else { return }
 
-        // A soft bump around each line start.
+        // A soft bump around each line start (only those within a second can add anything; found by bisection, as
+        // a video's wide search tries hundreds of shifts).
         func bump(_ t: Double) -> Double {
-            starts.reduce(0) { sum, start in
-                let d = t - start
-                return abs(d) > 1 ? sum : sum + exp(-d * d / 0.125)
+            var lo = 0, hi = starts.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if starts[mid] < t - 1 { lo = mid + 1 } else { hi = mid }
             }
+            var sum = 0.0
+            while lo < starts.count, starts[lo] <= t + 1 {
+                let d = t - starts[lo]
+                sum += exp(-d * d / 0.125)
+                lo += 1
+            }
+            return sum
         }
 
         var scores: [(shift: Double, score: Double)] = []
-        for step in Int(-maxShift * 10)...Int(maxShift * 10) {
+        for step in Int((lowest * 10).rounded())...Int(maxShift * 10) {
             let shift = Double(step) / 10
             let mask = samples.map { bump($0.position + userOffset + shift) }
-            guard let m = standardised(mask) else { return }  // no line starts in the window
+            guard let m = standardised(mask) else {
+                // No line starts in the window at this shift. Within the usual range that means nothing to go on.
+                if lowest == -maxShift { return }
+                scores.append((shift, 0))
+                continue
+            }
             let score = zip(m, vocal).map(*).reduce(0, +) / Double(m.count)
             scores.append((shift, score))
         }
@@ -149,11 +184,14 @@ final class AutoSync {
         // The best match has to stand out from any match more than 0.6 s away, or it's a repeated section
         // lining up by chance — on real songs those false matches were never more than ~1.15× the runner-up.
         let runnerUp = scores.filter { abs($0.shift - best.shift) > 0.6 }.map(\.score).max() ?? 0
-        let clear = best.score > 0.08 && best.score > runnerUp * 1.5
+        // A shift beyond the usual range (a video's intro) has to win far more clearly: songs with evenly spaced
+        // lines line up just as well a bar or two off, and a wrong big shift made a whole song's lyrics nonsense.
+        let wide = abs(best.shift) > maxShift
+        let clear = best.score > (wide ? 0.15 : 0.08) && best.score > runnerUp * (wide ? 2.5 : 1.5)
 
         // Small shifts are within the method's error; real mistimings are half a second or more. A best match at
         // the edge of the search is never trusted.
-        guard clear, abs(best.shift - offset) >= 0.4, abs(best.shift) < maxShift - 0.15,
+        guard clear, abs(best.shift - offset) >= 0.4, best.shift > lowest + 0.15, best.shift < maxShift - 0.15,
               best.score > current.score * 1.2 + 0.02 else {
             candidate = nil
             agreeing = 0
@@ -171,7 +209,7 @@ final class AutoSync {
             agreeing = 1
             return
         }
-        if agreeing >= 3, let candidate {
+        if agreeing >= (abs(best.shift) > maxShift ? 6 : 3), let candidate {
             offset = (candidate + best.shift) / 2
             if let trackID { remembered[trackID] = offset }
             self.candidate = nil

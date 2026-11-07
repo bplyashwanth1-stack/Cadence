@@ -19,6 +19,18 @@ struct Preset {
 }
 
 extension StyleValues {
+    /// A visual with the lyric look that goes with it, clean like a wallpaper: no rim light, bursts or particles.
+    mutating func visualLook(_ background: String) {
+        stageBackground = background
+        stageLayout = "matched"
+        edgeGlow = false
+        keywordBursts = false
+        particles = "none"
+        depth = false
+        lyricsBacking = "none"
+        motion = 0.6
+    }
+
     /// Copies over everything a preset shouldn't touch: where lyrics show, sync, the desktop window, permissions.
     func keepingSystemSettings(from c: StyleValues) -> StyleValues {
         var v = self
@@ -31,11 +43,27 @@ extension StyleValues {
         v.titleCard = c.titleCard
         v.autoSync = c.autoSync
         v.lyricsBackup = c.lyricsBackup
+        v.youtube = c.youtube
         v.matchOutput = c.matchOutput
         v.learnTiming = c.learnTiming
         v.batterySaver = c.batterySaver
         v.showOnDesktop = c.showOnDesktop
+        v.liveWallpaper = c.liveWallpaper
+        v.shuffleLooks = c.shuffleLooks
+        v.syncLyrics = c.syncLyrics
+        v.translate = c.translate
+        v.tintVisuals = c.tintVisuals
+        v.secondLayout = c.secondLayout
+        v.desktopLayout = c.desktopLayout
         v.edgeDesktop = c.edgeDesktop
+        // The edge light is yours, not the preset's: it stays as you set it whichever look you pick.
+        v.edgeGlow = c.edgeGlow
+        v.edgeStyle = c.edgeStyle
+        v.edgeColor = c.edgeColor
+        v.edgeHex = c.edgeHex
+        v.edgeThickness = c.edgeThickness
+        v.edgeBrightness = c.edgeBrightness
+        v.edgeBeat = c.edgeBeat
         v.fontSize = c.fontSize
         v.width = c.width
         v.background = c.background
@@ -84,6 +112,108 @@ enum Presets {
             v.keywordBursts = false
             v.backgroundDarkness = 0.75
             v.motion = 0.25
+        },
+        Preset(name: "Visualizer", symbol: "sparkles.tv.fill", blurb: "Cuts between all the visuals, each with its own lyric look") { v in
+            v.visualLook("visualmix")
+        },
+        Preset(name: "Nebula", symbol: "moon.stars.fill", blurb: "Purple space, neon comets, the sung word in a box") { v in
+            v.visualLook("nebula")
+        },
+        Preset(name: "Voxel Land", symbol: "cube.fill", blurb: "A block landscape with a river, soft pink words") { v in
+            v.visualLook("voxel")
+        },
+        Preset(name: "Vortex", symbol: "hurricane", blurb: "The artwork as a spinning storm") { v in
+            v.visualLook("vortex")
+        },
+        Preset(name: "Chrome", symbol: "staroflife.fill", blurb: "A spiky chrome sculpture, one huge word at a time") { v in
+            v.visualLook("chrome")
+        },
+        Preset(name: "Dot Globe", symbol: "globe", blurb: "A globe of dots, the line building up in orange and gold") { v in
+            v.visualLook("dotsphere")
+        },
+        Preset(name: "Particle Hill", symbol: "circle.dashed", blurb: "Glowing strands, a ring on every beat") { v in
+            v.visualLook("hill")
+        },
+        Preset(name: "Smear", symbol: "wind", blurb: "The artwork in motion blur, big red words") { v in
+            v.visualLook("smear")
+        },
+        Preset(name: "Sunset Glow", symbol: "sun.horizon.fill", blurb: "A warm gradient and 3D letters") { v in
+            v.visualLook("sunset")
+        },
+        Preset(name: "Contours", symbol: "water.waves", blurb: "Black and white bands winding together, words on tape") { v in
+            v.visualLook("contours")
+        },
+        Preset(name: "Molten", symbol: "flame", blurb: "Seams of lava, the sung word in a dark box") { v in
+            v.visualLook("molten")
+        },
+        Preset(name: "Terraces", symbol: "map.fill", blurb: "A topographic map in steps of blue") { v in
+            v.visualLook("terraces")
+        },
+        Preset(name: "Silk", symbol: "wind.snow", blurb: "Pale silk folds, words on a strip of tape") { v in
+            v.visualLook("silk")
+        },
+        Preset(name: "Ink Drops", symbol: "drop.fill", blurb: "Ink merging on paper, big red words") { v in
+            v.visualLook("ink")
+        },
+        Preset(name: "Tunnel", symbol: "circle.circle", blurb: "Neon rings rushing past, one word at a time") { v in
+            v.visualLook("tunnel")
+        },
+        Preset(name: "Wire Sea", symbol: "waveform.path", blurb: "A wireframe ocean lifted by the music") { v in
+            v.visualLook("wiresea")
+        },
+        Preset(name: "Night City", symbol: "building.2.fill", blurb: "Flying low over a block city at night") { v in
+            v.visualLook("city")
+        },
+        Preset(name: "Ringed Planet", symbol: "globe.americas.fill", blurb: "A planet in a ring of glittering dust") { v in
+            v.visualLook("ringed")
+        },
+        Preset(name: "Shoal", symbol: "fish.fill", blurb: "A school of fish circling under shafts of light") { v in
+            v.visualLook("shoal")
+        },
+        Preset(name: "Warp", symbol: "sparkles", blurb: "Stars streaking to light speed on every hit") { v in
+            v.visualLook("warp")
+        },
+        Preset(name: "Paper Bird", symbol: "bird.fill", blurb: "A paper bird gliding over low hills at dusk") { v in
+            v.visualLook("paperbird")
+        },
+        Preset(name: "Freefall", symbol: "arrow.down.to.line", blurb: "Dropping between lit towers") { v in
+            v.visualLook("freefall")
+        },
+        Preset(name: "Light Hall", symbol: "rectangle.portrait.on.rectangle.portrait", blurb: "A hall of glowing frames, pulsing on the beat") { v in
+            v.visualLook("lighthall")
+        },
+        Preset(name: "TV Wall", symbol: "tv", blurb: "Old TVs flicking between the cover and static") { v in
+            v.visualLook("tvwall")
+        },
+        Preset(name: "Neon Lattice", symbol: "square.grid.3x3.fill", blurb: "Flying through a grid of neon beams") { v in
+            v.visualLook("lattice")
+        },
+        Preset(name: "Northern Lights", symbol: "sparkles", blurb: "Aurora curtains over a dark field") { v in
+            v.visualLook("northern")
+        },
+        Preset(name: "Neon Dunes", symbol: "sun.dust.fill", blurb: "Dunes at dusk traced in neon") { v in
+            v.visualLook("dunes")
+        },
+        Preset(name: "Glow Lagoon", symbol: "drop.circle.fill", blurb: "Glowing water, a ring on every beat") { v in
+            v.visualLook("lagoon")
+        },
+        Preset(name: "Canyon", symbol: "mountain.2.fill", blurb: "Layered rock in rust and sand") { v in
+            v.visualLook("canyon")
+        },
+        Preset(name: "Helix", symbol: "hurricane", blurb: "A spiral of blocks swelling with the music") { v in
+            v.visualLook("helix")
+        },
+        Preset(name: "Clockwork", symbol: "clock.fill", blurb: "A clock ticking on the beat, with butterflies") { v in
+            v.visualLook("clockwork")
+        },
+        Preset(name: "Glass Swirl", symbol: "circle.hexagongrid.fill", blurb: "Ribbons of glass spiralling in") { v in
+            v.visualLook("glassswirl")
+        },
+        Preset(name: "Gravity Well", symbol: "circle.dotted.circle", blurb: "Light spiralling down into a well") { v in
+            v.visualLook("gravitywell")
+        },
+        Preset(name: "Wood Grain", symbol: "square.stack.3d.down.forward.fill", blurb: "Polished wood rings and knots") { v in
+            v.visualLook("woodgrain")
         },
         Preset(name: "Night Drive", symbol: "moon.stars.fill", blurb: "Spinning vinyl, neon words, stars") { v in
             v.stageBackground = "vinyl"
@@ -777,12 +907,64 @@ enum Presets {
 }
 
 extension Presets {
-    /// Every preset in menu order — favourites, then built-in, then the user's — as (name, symbol, values).
-    static func all(keeping current: StyleValues) -> [(name: String, symbol: String, values: StyleValues)] {
-        let list = builtIn.map { ($0.name, $0.symbol, $0.values(keeping: current)) }
-            + PresetStore.shared.custom.map { ($0.name, "star.fill", $0.values(keeping: current)) }
+    typealias Item = (name: String, symbol: String, values: StyleValues)
+
+    /// The built-in presets in groups, so seventy-odd looks can be browsed a handful at a time.
+    static let groups: [(name: String, symbol: String, members: [String])] = [
+        ("Live Visuals", "sparkles.tv.fill", ["Visualizer"]),
+        ("Space & Light", "moon.stars.fill",
+         ["Nebula", "Tunnel", "Warp", "Ringed Planet", "Gravity Well", "Particle Hill", "Sunset Glow"]),
+        ("Sculptures", "cube.transparent",
+         ["Chrome", "Dot Globe", "Vortex", "Smear", "Helix", "Glass Swirl", "Clockwork"]),
+        ("Flow & Contours", "water.waves",
+         ["Contours", "Molten", "Terraces", "Silk", "Ink Drops", "Canyon", "Wood Grain"]),
+        ("Landscapes & Cities", "building.2.fill",
+         ["Voxel Land", "Wire Sea", "Night City", "Shoal", "Northern Lights", "Neon Dunes", "Glow Lagoon", "Paper Bird"]),
+        ("Journeys", "airplane", ["Freefall", "Light Hall"]),
+        ("Rooms & Grids", "square.grid.3x3.fill", ["TV Wall", "Neon Lattice"]),
+        ("Reel Edits", "scissors",
+         ["Reel Edit", "Fan Edit", "Cinema Cut", "Poster Drop", "Highlighter", "Hype", "Glitchcore", "Movie Subs",
+          "Late Night", "Fisheye", "Fisheye Visual"]),
+        ("Moods", "heart.text.square.fill",
+         ["Chill", "Love Letter", "Sad Hours", "Golden Hour", "Y2K", "Polaroid Days", "Mixtape", "Moonlit",
+          "Snow Globe", "Monsoon", "Sakura", "Festival", "Bubblegum", "Ripple", "Zen Garden", "Love Note",
+          "Night Drive", "Galaxy", "Synthwave"]),
+        ("Scenes", "photo.on.rectangle.angled",
+         ["Late Show", "Stadium", "Art Gallery", "Times Square", "Channel 3", "Cosmos", "Sunset Beach", "High Peaks",
+          "Open Road", "Neon Alley", "Deep Blue", "Enchanted", "Code Rain", "Front Page", "Text Thread",
+          "Exit Ahead", "Console", "Comic Book", "Night Museum", "Stargazer", "Winter Peaks", "Drive-In", "Arcade",
+          "Campfire"]),
+    ]
+
+    /// Built-in presets by group, in order. Any preset not listed in a group lands in "More".
+    static var grouped: [(name: String, symbol: String, presets: [Preset])] {
+        let byName = Dictionary(builtIn.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        var result = groups.map { group in (group.name, group.symbol, group.members.compactMap { byName[$0] }) }
+        let listed = Set(groups.flatMap(\.members))
+        let rest = builtIn.filter { !listed.contains($0.name) }
+        if !rest.isEmpty { result.append(("More", "ellipsis.circle", rest)) }
+        return result
+    }
+
+    /// What the preset lists show: favourites first, then each group, then the user's own.
+    static func sections(keeping current: StyleValues) -> [(name: String, symbol: String, items: [Item])] {
+        var sections: [(name: String, symbol: String, items: [Item])] = grouped.map { group in
+            (group.name, group.symbol, group.presets.map { ($0.name, $0.symbol, $0.values(keeping: current)) })
+        }
+        let custom = PresetStore.shared.custom.map { ($0.name, "star.fill", $0.values(keeping: current)) as Item }
+        if !custom.isEmpty { sections.append(("Your Presets", "star.fill", custom)) }
         let favourites = PresetMemory.shared.favourites
-        return list.filter { favourites.contains($0.0) } + list.filter { !favourites.contains($0.0) }
+        let liked = sections.flatMap(\.items).filter { favourites.contains($0.name) }
+        if !liked.isEmpty { sections.insert(("Favourites", "heart.fill", liked), at: 0) }
+        return sections
+    }
+
+    /// Every preset in menu order — favourites, then the groups, then the user's — as (name, symbol, values).
+    static func all(keeping current: StyleValues) -> [Item] {
+        let list = grouped.flatMap(\.presets).map { ($0.name, $0.symbol, $0.values(keeping: current)) as Item }
+            + PresetStore.shared.custom.map { ($0.name, "star.fill", $0.values(keeping: current)) as Item }
+        let favourites = PresetMemory.shared.favourites
+        return list.filter { favourites.contains($0.name) } + list.filter { !favourites.contains($0.name) }
     }
 
     /// The name of the preset the current look matches, if any.
@@ -876,6 +1058,19 @@ final class PresetMemory: ObservableObject {
             self.usual = nil
             applied = nil
         }
+        // Shuffle: a song with no pinned look gets a different favourite (or visual, with no favourites).
+        if rule(for: track) == nil && style.v.shuffleLooks {
+            let everything = Presets.all(keeping: style.v)
+            let liked = everything.filter { favourites.contains($0.name) }
+            let visuals = Set(Presets.groups.prefix(7).flatMap(\.members))
+            let pool = (liked.isEmpty ? everything.filter { visuals.contains($0.name) } : liked)
+                .filter { $0.values != style.v }
+            if let pick = pool.randomElement() {
+                var values = pick.values
+                values.shuffleLooks = true
+                Presets.pick(pick.name, pick.symbol, values)
+            }
+        }
     }
 }
 
@@ -964,24 +1159,38 @@ struct PresetPicker: View {
     @ObservedObject private var memory = PresetMemory.shared
     @State private var newName = ""
 
+    @State private var open: Set<String> = []
+    @State private var hovered: String?
+
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-            ForEach(Presets.builtIn, id: \.name) { preset in
-                card(preset.name, preset.symbol, preset.blurb, preset.values(keeping: style.v))
-            }
-            ForEach(store.custom) { preset in
-                card(preset.name, "star.fill", "Your look", preset.values(keeping: style.v))
-                    .overlay(alignment: .topTrailing) {
-                        Button { store.delete(preset.name) } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(6)
-                        .help("Delete this preset")
+        let blurbs = Dictionary(Presets.builtIn.map { ($0.name, $0.blurb) }, uniquingKeysWith: { first, _ in first })
+        let custom = Set(store.custom.map(\.name))
+        ForEach(Presets.sections(keeping: style.v), id: \.name) { section in
+            DisclosureGroup(isExpanded: Binding(
+                get: { open.contains(section.name) || section.items.contains { $0.values == style.v } },
+                set: { if $0 { open.insert(section.name) } else { open.remove(section.name) } }
+            )) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(section.items, id: \.name) { item in
+                        card(item.name, item.symbol, blurbs[item.name] ?? "Your look", item.values)
+                            .overlay(alignment: .topTrailing) {
+                                if custom.contains(item.name) && section.name == "Your Presets" {
+                                    Button { store.delete(item.name) } label: {
+                                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(6)
+                                    .help("Delete this preset")
+                                }
+                            }
                     }
+                }
+                .padding(.vertical, 4)
+            } label: {
+                Label("\(section.name)  \(Text("\(section.items.count)").foregroundStyle(.secondary))", systemImage: section.symbol)
+                    .font(.headline)
             }
         }
-        .padding(.vertical, 4)
         HStack {
             TextField("Name", text: $newName, prompt: Text("Save the current look as…"))
                 .onSubmit(save)
@@ -999,7 +1208,8 @@ struct PresetPicker: View {
         let favourite = memory.favourites.contains(name)
         return Button { style.v = values } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Image(systemName: symbol).font(.title3)
+                PresetThumb(values: values, symbol: symbol, size: CGSize(width: 136, height: 76), live: hovered == name)
+                    .font(.title3)
                 Text(name).font(.headline)
                 Text(blurb).font(.caption).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
             }
@@ -1011,6 +1221,7 @@ struct PresetPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovered = $0 ? name : (hovered == name ? nil : hovered) }
         .overlay(alignment: .bottomTrailing) {
             Button { memory.toggleFavourite(name) } label: {
                 Image(systemName: favourite ? "heart.fill" : "heart").foregroundStyle(favourite ? Color.pink : .secondary)
@@ -1018,6 +1229,61 @@ struct PresetPicker: View {
             .buttonStyle(.plain)
             .padding(8)
             .help("Favourite")
+        }
+    }
+}
+
+// MARK: - Thumbnails
+
+/// A small picture of a preset's visual: still in lists, moving while the pointer is over it. Presets with
+/// other backgrounds keep their symbol.
+@MainActor
+enum PresetThumbs {
+    private static var cache: [String: NSImage] = [:]
+
+    /// The visual a preset shows, if it's one of the generated ones.
+    static func kind(_ values: StyleValues) -> String? {
+        if values.stageBackground == "visualmix" { return "nebula" }
+        return Visuals.tags.contains(values.stageBackground) ? values.stageBackground : nil
+    }
+
+    static func still(_ kind: String, _ size: CGSize) -> NSImage? {
+        let key = "\(kind)-\(Int(size.width))"
+        if let hit = cache[key] { return hit }
+        let art = NowPlaying.shared.artwork ?? NSImage(size: NSSize(width: 8, height: 8))
+        let renderer = ImageRenderer(content: VisualScene(kind: kind, art: art, size: size, t: 12, motion: 0.6, kick: 0.3,
+                                                          beatAge: 0.4, bands: []))
+        renderer.scale = 2
+        guard let image = renderer.nsImage else { return nil }
+        cache[key] = image
+        return image
+    }
+}
+
+struct PresetThumb: View {
+    let values: StyleValues
+    let symbol: String
+    let size: CGSize
+    var live = false
+    @ObservedObject private var player = NowPlaying.shared
+
+    var body: some View {
+        if let kind = PresetThumbs.kind(values) {
+            Group {
+                if live {
+                    TimelineView(.animation(minimumInterval: 1 / 24)) { context in
+                        VisualScene(kind: kind, art: player.artwork ?? NSImage(size: NSSize(width: 8, height: 8)), size: size,
+                                    t: context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600),
+                                    motion: 0.6, kick: 0.3, beatAge: 0.4, bands: [])
+                    }
+                } else if let still = PresetThumbs.still(kind, size) {
+                    Image(nsImage: still).resizable()
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: min(size.height * 0.15, 8), style: .continuous))
+        } else {
+            Image(systemName: symbol)
         }
     }
 }

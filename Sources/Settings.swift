@@ -40,27 +40,48 @@ struct SettingsView: View {
     @ObservedObject private var timing = SongTiming.shared
 
     var body: some View {
-        Form {
-            Section {
-                LabeledContent("Now playing") {
-                    Text(player.track.map { "\($0.title) — \($0.artist)" } ?? "Nothing").lineLimit(1)
+        // Four tabs, so each page stays short.
+        TabView {
+            Form {
+                nowPlaying
+                Section("Presets") {
+                    Toggle("Shuffle: each new song gets a different favourite look", isOn: $style.v.shuffleLooks)
+                    PresetPicker()
                 }
-                if !player.status.isEmpty {
-                    LabeledContent("Lyrics") { Text(player.status) }
+                lockScreen
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Look", systemImage: "paintpalette") }
+
+            Form {
+                font
+                text
+                color
+                animation
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Lyrics", systemImage: "textformat") }
+
+            Form {
+                desktop
+            Section("YouTube") {
+                Toggle("Follow YouTube and YouTube Music in the browser", isOn: $style.v.youtube)
+                if style.v.youtube {
+                    Text("Works in Chrome, Safari, Arc, Brave, Edge and Vivaldi. Spotify and Music come first when they're playing.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(YouTube.blocked, id: \.bundleID) { browser in
+                        Text("⚠️ \(browser.name) needs one switch turned on — \(browser.setting).")
+                            .font(.caption)
+                    }
                 }
             }
 
-            Section("Presets") {
-                PresetPicker()
             }
+            .formStyle(.grouped)
+            .tabItem { Label("Desktop", systemImage: "menubar.dock.rectangle") }
 
-            lockScreen
-            font
-            text
-            color
-            animation
-            desktop
-
+            Form {
+                nowPlaying
             Section("Sync") {
                 if let id = player.track?.id {
                     slider("This song", Binding(get: { timing.offset(id) }, set: { timing.set($0, for: id) }),
@@ -88,24 +109,70 @@ struct SettingsView: View {
                 Button("Search lyrics again") { player.reloadLyrics() }
             }
 
-            Section {
-                Button("Reset all settings") { style.v = StyleValues() }
+                Section("Your lyrics") {
+                    Toggle("Keep my edited lyrics in iCloud Drive (shared with my other Macs)", isOn: $style.v.syncLyrics)
+                    Toggle("Show a translation under lyrics in another language", isOn: $style.v.translate)
+                }
+                Section {
+                    Button("Reset all settings") { style.v = StyleValues() }
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Timing", systemImage: "timer") }
+        }
+        .frame(width: 560, height: 760)
+    }
+
+    private var nowPlaying: some View {
+        Section {
+            LabeledContent("Now playing") {
+                Text(player.track.map { "\($0.title) — \($0.artist)" } ?? "Nothing").lineLimit(1)
+            }
+            if !player.status.isEmpty {
+                LabeledContent("Lyrics") { Text(player.status) }
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 540, height: 760)
     }
 
     private var lockScreen: some View {
         Section("Lock screen") {
             Toggle("Show lyrics on lock screen", isOn: $style.v.showOnLockScreen)
             Picker("Layout", selection: $style.v.stageLayout) {
-                Text("Word stack").tag("stack")
-                Text("Lines").tag("lines")
-                Text("Reel").tag("reel")
-                Text("Constellation").tag("constellation")
-                Text("Fisheye").tag("fisheye")
-                Text("Fisheye Visual").tag("fisheyevisual")
+                ForEach(StyleValues.layouts, id: \.0) { Text($0.1).tag($0.0) }
+            }
+            Picker("Other displays", selection: $style.v.secondLayout) {
+                Text("Same as this one").tag("same")
+                Divider()
+                ForEach(StyleValues.layouts.filter { $0.0 != "matched" }, id: \.0) { Text($0.1).tag($0.0) }
+            }
+            .help("The lyric style on your other screens, when the live wallpaper is on")
+            if StyleValues.visualLayouts.contains(style.v.stageLayout) {
+                Picker("Lyric colours", selection: $style.v.lyricColors) {
+                    Text("The style's own").tag("look")
+                    Text("From the album art").tag("album")
+                    Text("My colour").tag("custom")
+                }
+                if style.v.lyricColors == "custom" {
+                    ColorPicker("Lyric colour", selection: Binding(
+                        get: { Color(hex: style.v.lyricHex) },
+                        set: { style.v.lyricHex = $0.hex }
+                    ), supportsOpacity: false)
+                }
+                if style.v.lyricColors != "look" {
+                    Picker("Harmony", selection: $style.v.harmony) {
+                        ForEach(Harmony.modes, id: \.tag) { Text($0.name).tag($0.tag) }
+                    }
+                }
+            }
+            if style.v.stageLayout == "matched" {
+                Text("Each visual brings its own lyric look; other backgrounds use a column.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if style.v.stageLayout == "column" {
+                Picker("Word being sung", selection: $style.v.stackStyle) {
+                    Text("Large, in the lyric colour").tag("effect")
+                    Text("In a box").tag("box")
+                }
             }
             if style.v.stageLayout == "stack" {
                 Picker("Word being sung", selection: $style.v.stackStyle) {
@@ -134,6 +201,9 @@ struct SettingsView: View {
                 Text("Retro Grid — the cover on a neon sunset").tag("retro")
                 ForEach(WorldScene.kinds, id: \.tag) { Text($0.name).tag($0.tag) }
                 Divider()
+                Text("Visual Mix — cuts between the visuals, a different one per screen").tag("visualmix")
+                ForEach(Visuals.kinds, id: \.tag) { Text($0.name).tag($0.tag) }
+                Divider()
                 Text("Aurora — flowing album colors and artwork").tag("aurora")
                 Text("Album color").tag("album")
                 Text("Album gradient").tag("gradient")
@@ -155,6 +225,7 @@ struct SettingsView: View {
             if StyleValues.wallpapers.contains(style.v.stageBackground) {
                 slider("Motion", $style.v.motion, 0...1) { String(format: "%.0f%%", $0 * 100) }
                 Toggle("Kick on the beat", isOn: $style.v.beatZoom)
+                Toggle("Visuals take on the album's colour", isOn: $style.v.tintVisuals)
                 Toggle("Artist in front of the clock (motion, mono and duotone scenes)", isOn: $style.v.depth)
                 if style.v.depth {
                     Toggle("…and in front of the lyrics (can hide words)", isOn: $style.v.depthOverLyrics)
@@ -193,7 +264,7 @@ struct SettingsView: View {
                 Text("Road sign").tag("sign")
             }
             slider("Lyrics size", $style.v.stageFontSize, 60...300) { String(format: "%.0f pt", $0) }
-            Toggle("Edge glow", isOn: $style.v.edgeGlow)
+            Toggle("Edge light (stays as you set it, whatever the preset)", isOn: $style.v.edgeGlow)
             if style.v.edgeGlow {
                 Picker("Edge light", selection: $style.v.edgeStyle) {
                     Text("Racing streaks").tag("race")
@@ -303,10 +374,24 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var desktop: some View {
+        Section("Live wallpaper") {
+            Toggle("Lock-screen look as the desktop wallpaper while music plays", isOn: $style.v.liveWallpaper)
+            Text("Fills every screen behind your windows and icons, and goes back to your own wallpaper when the music stops.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+
         Section("Desktop overlay") {
             Toggle("Show lyrics on desktop", isOn: $style.v.showOnDesktop)
             if style.v.showOnDesktop {
+                Picker("Style", selection: $style.v.desktopLayout) {
+                    Text("Lines").tag("lines")
+                    Divider()
+                    ForEach(StyleValues.layouts.filter { StyleValues.visualLayouts.contains($0.0) }, id: \.0) {
+                        Text($0.1).tag($0.0)
+                    }
+                }
                 slider("Size", $style.v.fontSize, 16...80) { String(format: "%.0f pt", $0) }
                 slider("Width", $style.v.width, 360...1400) { String(format: "%.0f", $0) }
                 Picker("Background", selection: $style.v.background) {

@@ -79,23 +79,37 @@ final class SongTiming: ObservableObject {
 final class TapSync: ObservableObject {
     let track: Track
     let lines: [String]
+    /// Word by word: each tap times the next word rather than the next line.
+    let byWord: Bool
+    /// Every word in order, with the line it belongs to (word mode).
+    let words: [(text: String, line: Int)]
     private let originalStarts: [Double]
+    private let originalWordStarts: [Double]
+    private let songEnd: Double
     @Published private(set) var taps: [Double] = []
     @Published private(set) var finished = false
 
     /// Taps land a little after the line really starts — people react to the voice they hear.
     private let reaction = 0.15
 
-    init?(player: NowPlaying) {
+    init?(player: NowPlaying, byWord: Bool = false) {
         guard let track = player.track else { return nil }
         let sung = player.lyrics.filter { !$0.words.isEmpty }
         guard !sung.isEmpty else { return nil }
         self.track = track
+        self.byWord = byWord
         lines = sung.map { $0.words.map(\.text).joined(separator: " ") }
         originalStarts = sung.map(\.start)
+        words = sung.enumerated().flatMap { i, line in line.words.map { ($0.text, i) } }
+        originalWordStarts = sung.flatMap { $0.words.map(\.start) }
+        songEnd = max(track.duration, (sung.last?.end ?? 0) + 1)
     }
 
     var next: Int { taps.count }
+    /// How many taps finish the song.
+    var total: Int { byWord ? words.count : lines.count }
+    /// The line being tapped (in word mode, the line of the next word).
+    var currentLine: Int { byWord ? (next < words.count ? words[next].line : lines.count) : next }
 
     func start() {
         let player = NowPlaying.shared
@@ -105,10 +119,10 @@ final class TapSync: ObservableObject {
     }
 
     func tap() {
-        guard !finished, next < lines.count else { return }
+        guard !finished, next < total else { return }
         let position = NowPlaying.shared.position(at: Date()) - reaction
-        taps.append(max(0, max(position, (taps.last ?? -1) + 0.1)))
-        if taps.count == lines.count { save() }
+        taps.append(max(0, max(position, (taps.last ?? -1) + (byWord ? 0.05 : 0.1))))
+        if taps.count == total { save() }
     }
 
     /// Takes back the last tap and rewinds to just before that line so it can be tapped again.
@@ -120,6 +134,7 @@ final class TapSync: ObservableObject {
     /// Saves what's tapped; lines not reached yet keep their old timing, moved by how far off the taps found it.
     func save() {
         guard !taps.isEmpty else { return }
+        if byWord { return saveWords() }
         let drift = zip(taps, originalStarts).map { $0 - $1 }.suffix(5)
         let shift = drift.reduce(0, +) / Double(drift.count)
         let times = lines.indices.map { $0 < taps.count ? taps[$0] : originalStarts[$0] + shift }
@@ -128,6 +143,30 @@ final class TapSync: ObservableObject {
             return String(format: "[%02d:%05.2f] %@", minutes, time - Double(minutes * 60), text)
         }.joined(separator: "\n")
         SongTiming.shared.saveTapped(lrc, for: track.id)
+        NowPlaying.shared.reloadLyrics()
+        finished = true
+    }
+
+    /// Word mode: every word gets its own stamp ("[line] <word>text <word>text <end>"), words not reached keep
+    /// their old timing moved by how far off the taps found it.
+    private func saveWords() {
+        let drift = zip(taps, originalWordStarts).map { $0 - $1 }.suffix(8)
+        let shift = drift.reduce(0, +) / Double(drift.count)
+        let times = words.indices.map { $0 < taps.count ? taps[$0] : originalWordStarts[$0] + shift }
+        func stamp(_ t: Double, _ open: String, _ close: String) -> String {
+            let minutes = Int(t) / 60
+            return open + String(format: "%02d:%05.2f", minutes, t - Double(minutes * 60)) + close
+        }
+        var out: [String] = []
+        for line in lines.indices {
+            let members = words.indices.filter { words[$0].line == line }
+            guard let first = members.first, let last = members.last else { continue }
+            // The line ends where the next one starts, or a little after its last word.
+            let end = last + 1 < times.count ? times[last + 1] : min(times[last] + 1.5, songEnd)
+            let body = members.map { stamp(times[$0], "<", ">") + words[$0].text }.joined(separator: " ")
+            out.append(stamp(times[first], "[", "]") + " " + body + " " + stamp(end, "<", ">"))
+        }
+        SongTiming.shared.saveTapped(out.joined(separator: "\n"), for: track.id)
         NowPlaying.shared.reloadLyrics()
         finished = true
     }
@@ -147,15 +186,15 @@ struct TapSyncView: View {
                 Spacer()
                 Button("Done", action: close).keyboardShortcut(.defaultAction)
             } else {
-                Text("Press **Space** the moment each line starts.")
+                Text(session.byWord ? "Press **Space** as each word is sung." : "Press **Space** the moment each line starts.")
                     .foregroundStyle(.secondary)
                 Spacer()
-                line(session.next - 1, size: 18, opacity: 0.35)
-                line(session.next, size: 30, opacity: 1)
-                line(session.next + 1, size: 18, opacity: 0.35)
+                line(session.currentLine - 1, size: 18, opacity: 0.35)
+                if session.byWord { wordLine } else { line(session.next, size: 30, opacity: 1) }
+                line(session.currentLine + 1, size: 18, opacity: 0.35)
                 Spacer()
-                ProgressView(value: Double(session.next), total: Double(session.lines.count))
-                Text("\(session.next) of \(session.lines.count) lines")
+                ProgressView(value: Double(session.next), total: Double(session.total))
+                Text("\(session.next) of \(session.total) \(session.byWord ? "words" : "lines")")
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 HStack(spacing: 18) {
                     Label("Undo: Delete", systemImage: "delete.left")
@@ -167,6 +206,22 @@ struct TapSyncView: View {
         }
         .padding(28)
         .frame(width: 620, height: 420)
+    }
+
+    /// The line being tapped, word by word: done words dim, the next word highlighted.
+    private var wordLine: some View {
+        let line = session.currentLine
+        let members = session.words.indices.filter { session.words[$0].line == line }
+        return members.reduce(Text("")) { text, i in
+            let word = Text(session.words[i].text + " ")
+            let styled = i == session.next ? word.foregroundColor(.accentColor).bold()
+                : i < session.next ? word.foregroundColor(.secondary) : word
+            return text + styled
+        }
+        .font(.system(size: 30, weight: .semibold, design: .rounded))
+        .multilineTextAlignment(.center)
+        .lineLimit(3)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

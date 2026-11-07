@@ -20,7 +20,7 @@ enum Log {
     }
 }
 
-// MARK: - Players (Spotify / Apple Music via AppleScript)
+// MARK: - Players (Spotify / Apple Music via AppleScript; YouTube in YouTube.swift)
 
 struct Track: Equatable {
     let id: String
@@ -28,7 +28,15 @@ struct Track: Equatable {
     let artist: String
     let album: String
     let duration: Double
-    let artworkURL: URL?  // Spotify only; Apple Music artwork is read via AppleScript
+    let artworkURL: URL?  // Spotify and YouTube; Apple Music artwork is read via AppleScript
+    var artworkFallback: URL? = nil  // tried when `artworkURL` doesn't exist (YouTube's widest thumbnail often doesn't)
+    /// From a video, whose length can include an intro, an outro or skits: lyrics for a somewhat shorter song are
+    /// accepted, and lined up with the video by ear (see AutoSync).
+    var video = false
+    /// More names the artist might go by (the channel, the rest of the video title); only used to confirm a match.
+    var hints = ""
+    /// Other readings of a video title to search with, e.g. both ways round "A - B".
+    var alternates: [Track] = []
 }
 
 struct PlayerState {
@@ -88,17 +96,39 @@ enum Player {
         Log.write("permission for \(bundleID): \(status)")
     }
 
-    /// Whichever player is playing (Spotify preferred), else whichever is paused.
+    /// The player that played last, kept across launches so a restart with everything paused shows the same song.
+    private static var lastSource = UserDefaults.standard.string(forKey: "lastSource") ?? "" {
+        didSet { if lastSource != oldValue { UserDefaults.standard.set(lastSource, forKey: "lastSource") } }
+    }
+
+    /// Whichever player is playing (Spotify, then Music, then YouTube), else whichever is paused — the one that
+    /// played last if it's still there.
     static func state() -> PlayerState? {
         let s = read(spotify, isSpotify: true)
-        if s?.playing == true { return s }
+        if s?.playing == true { return remember(s) }
         let m = read(music, isSpotify: false)
-        if m?.playing == true { return m }
-        return s ?? m
+        if m?.playing == true { return remember(m) }
+        let y = Style.shared.v.youtube ? YouTube.state() : nil
+        if y?.playing == true { return remember(y) }
+        // YouTube open in a browser that won't be read: probably what's playing, so say so rather than show a
+        // paused song from before.
+        if let y, y.track.id.hasPrefix(YouTube.setupPrefix) { return remember(y) }
+        let paused = [s, m, y].compactMap { $0 }
+        return remember(paused.first { source($0.track.id) == lastSource } ?? paused.first)
+    }
+
+    private static func source(_ id: String) -> String { String(id.prefix { $0 != ":" }) }
+
+    private static func remember(_ state: PlayerState?) -> PlayerState? {
+        // Only playing counts: a paused player shown for want of anything else doesn't become the last one.
+        if let state, state.playing { lastSource = source(state.track.id) }
+        return state
     }
 
     /// Sends a transport command ("next track", "previous track", "playpause") to the player that owns the track.
     static func command(_ verb: String, trackID: String) {
+        if trackID.hasPrefix(YouTube.setupPrefix) { return }
+        if trackID.hasPrefix("youtube:") { return YouTube.command(verb) }
         let app = trackID.hasPrefix("music:") ? "Music" : "Spotify"
         var error: NSDictionary?
         NSAppleScript(source: "tell application \"\(app)\" to \(verb)")?.executeAndReturnError(&error)
@@ -106,6 +136,8 @@ enum Player {
     }
 
     static func seek(to seconds: Double, trackID: String) {
+        if trackID.hasPrefix(YouTube.setupPrefix) { return }
+        if trackID.hasPrefix("youtube:") { return YouTube.seek(to: seconds) }
         let app = trackID.hasPrefix("music:") ? "Music" : "Spotify"
         let position = String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), seconds)
         var error: NSDictionary?
@@ -239,26 +271,43 @@ enum LRCLib {
 
     /// Every source at once, so none of them can hold up the song. Yields the first good answer straight away and
     /// then anything better, stopping at word timing; plain words only if nothing timed turned up.
-    static func answers(for track: Track, above current: Rank? = nil) -> AsyncStream<Found> {
-        AsyncStream { continuation in
+    static func answers(for track: Track, above current: Rank? = nil, currentLength: Double? = nil) -> AsyncStream<Found> {
+        // For a video, lyrics as long as the video (often uploaded timed to the video itself) beat any others, as
+        // they need no lining up; rank only decides between equally good fits.
+        func worth(_ lrc: String?, _ rank: Rank) -> Int {
+            guard track.video else { return rank.rawValue }
+            let length = lrc.flatMap(LRC.length) ?? (lrc == nil ? currentLength : nil)
+            let close = length.map { abs($0 - track.duration) <= 4 } ?? false
+            return (close ? 10 : 0) + rank.rawValue
+        }
+        return AsyncStream { continuation in
             let task = Task {
-                var best = current
+                var best = current.map { worth(nil, $0) }
                 var plain: String?
                 var failure: String?
                 await withTaskGroup(of: Answer.self) { group in
-                    group.addTask { await lrcLib(track) }
+                    // A video title can be read more than one way; each reading is searched, and only one that
+                    // matches a real song's title and artist can find anything.
+                    let readings = [track] + track.alternates
+                    var titles = Set<String>()
+                    for reading in readings {
+                        group.addTask { await lrcLib(reading) }
+                        if Style.shared.v.lyricsBackup {
+                            if titles.insert(key(clean(reading.title))).inserted { group.addTask { await netEase(reading) } }
+                            group.addTask { await kuGou(reading) }
+                        }
+                    }
                     if Style.shared.v.lyricsBackup {
-                        group.addTask { await netEase(track) }
-                        group.addTask { await kuGou(track) }
                         group.addTask { await lyricsOvh(track) }
                     }
                     for await answer in group {
                         plain = plain ?? answer.plain
                         failure = failure ?? answer.failure
-                        guard case .timed(let lrc, let rank)? = answer.found, best.map({ rank > $0 }) ?? true else { continue }
-                        best = rank
+                        guard case .timed(let lrc, let rank)? = answer.found, best.map({ worth(lrc, rank) > $0 }) ?? true else { continue }
+                        best = worth(lrc, rank)
                         continuation.yield(.timed(lrc, rank))
-                        if rank == .wordTimed { group.cancelAll() }
+                        // Nothing can beat word timing (that fits the video).
+                        if best == (track.video ? 10 : 0) + Rank.wordTimed.rawValue { group.cancelAll() }
                     }
                 }
                 if best == nil {
@@ -334,6 +383,10 @@ enum LRCLib {
         guard let title, let duration, key(clean(title)) == key(clean(track.title)), !key(track.title).isEmpty else {
             return false
         }
+        // A video's length says little, so the artist has to agree — unless the lengths match closely.
+        if track.video {
+            return fits(duration, track) && (sameArtist(artist, track) || abs(duration - track.duration) <= 1)
+        }
         let theirs = Set(words(artist ?? ""))
         let shared = words(track.artist).contains(where: theirs.contains)
         return abs(duration - track.duration) <= (shared ? 4 : 1)
@@ -341,6 +394,34 @@ enum LRCLib {
 
     private static func key(_ text: String) -> String {
         text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// Whether a song this long could be the one in this video: not longer, and not so much shorter that the video
+    /// would be mostly something else.
+    private static func fits(_ duration: Double, _ track: Track) -> Bool {
+        !track.video || (duration <= track.duration + 3 && duration >= track.duration * 0.6)
+    }
+
+    /// Their artist against the video's artist and every other name it mentions; "EdSheeranVEVO" counts for
+    /// "Ed Sheeran".
+    private static func sameArtist(_ artist: String?, _ track: Track) -> Bool {
+        guard let artist else { return false }
+        let ours = track.artist + " " + track.hints
+        // Words of the song's own title, and words every label and channel uses, say nothing about the artist.
+        let generic: Set = ["music", "official", "video", "audio", "records", "recordings", "entertainment", "songs",
+                            "series", "topic", "channel", "vevo", "films", "studios", "the", "and", "lyrics", "band"]
+        let mine = Set(words(ours)).subtracting(words(track.title)).subtracting(generic)
+        if words(artist).contains(where: mine.contains) { return true }
+        let compact = key(ours)
+        return artist.components(separatedBy: CharacterSet(charactersIn: ",&/")).map(key)
+            .contains { $0.count >= 4 && compact.contains($0) }
+    }
+
+    /// The length of the song found for a video, noted in the lyrics so AutoSync knows how far the song can sit
+    /// into the video. Not a timestamp, so nothing else reads it.
+    private static func tagged(_ lrc: String, _ length: Double?, _ track: Track) -> String {
+        guard track.video, let length, length > 0 else { return lrc }
+        return String(format: "[length:%02d:%02d]\n", Int(length) / 60, Int(length) % 60) + lrc
     }
 
     private static func words(_ text: String) -> [String] {
@@ -377,9 +458,9 @@ enum LRCLib {
             guard case .found(let reply) = await fetch(netEaseRequest(lyric.url!)),
                   let found = try? JSONDecoder().decode(NetEaseLyric.self, from: reply) else { continue }
             if let raw = found.yrc?.lyric, let lrc = LRC.fromWordTimed(raw).flatMap(withoutCredits) {
-                return Answer(found: .timed(lrc, .wordTimed))
+                return Answer(found: .timed(tagged(lrc, song.duration / 1000, track), .wordTimed))
             }
-            line = line ?? found.lrc?.lyric.flatMap(withoutCredits)
+            line = line ?? found.lrc?.lyric.flatMap(withoutCredits).map { tagged($0, song.duration / 1000, track) }
         }
         return Answer(found: line.map { .timed($0, .backup) })
     }
@@ -410,7 +491,9 @@ enum LRCLib {
             let lines = text.components(separatedBy: .newlines).filter { line in
                 !(line.contains(" - ") && key(line).contains(title))
             }
-            if let lrc = withoutCredits(lines.joined(separator: "\n")) { return Answer(found: .timed(lrc, .backup)) }
+            if let lrc = withoutCredits(lines.joined(separator: "\n")) {
+                return Answer(found: .timed(tagged(lrc, match.duration.map { $0 / 1000 }, track), .backup))
+            }
         }
         return Answer()
     }
@@ -456,13 +539,22 @@ enum LRCLib {
     /// 5 s ahead of the ~20 other uploads. So gather every close match and take the one whose timing agrees
     /// with the rest, instead of trusting the first hit.
     private static func best(_ items: [Item], for track: Track) -> String? {
+        // A video can run longer than the song in it; the song is taken to be the closest-length upload that fits.
+        let length = track.video
+            ? items.filter { $0.syncedLyrics?.isEmpty == false }.compactMap(\.duration).filter { fits($0, track) }
+                .min { abs($0 - track.duration) < abs($1 - track.duration) } ?? track.duration
+            : track.duration
         // A version more than a few seconds longer or shorter (radio edit, live, extended) has shifted
         // timestamps, which is worse than no lyrics.
+        // Uploads timed identically to the hundredth of a second are copies of one person's work, and get one
+        // vote: five copies of a timing 2 s late used to outvote three uploads timed separately that agreed.
+        var seen = Set<[Int]>()
         let candidates = items.compactMap { item -> (lrc: String, starts: [Double])? in
             guard let lrc = item.syncedLyrics, !lrc.isEmpty,
-                  abs((item.duration ?? track.duration) - track.duration) <= 4 else { return nil }
+                  abs((item.duration ?? length) - length) <= 4 else { return nil }
             let starts = LRC.parse(lrc).filter { !$0.words.isEmpty }.map(\.start)
-            return starts.isEmpty ? nil : (lrc, starts)
+            guard !starts.isEmpty, seen.insert(starts.map { Int(($0 * 100).rounded()) }).inserted else { return nil }
+            return (lrc, starts)
         }
         guard !candidates.isEmpty else { return nil }
 
@@ -478,18 +570,18 @@ enum LRCLib {
         if let wordTimed = candidates.first(where: {
             $0.lrc.contains("<") && $0.lrc.contains(">") && distance($0.starts, candidates[best].starts) < 0.4
         }) {
-            return wordTimed.lrc
+            return tagged(wordTimed.lrc, length, track)
         }
         // Timed uploads are sometimes missing lines or mangled; the untimed lyrics of the closest-length upload
         // can fill them in (see LyricsRepair).
         let plain = items
             .filter { $0.plainLyrics?.isEmpty == false }
-            .min { abs(($0.duration ?? 0) - track.duration) < abs(($1.duration ?? 0) - track.duration) }?
+            .min { abs(($0.duration ?? 0) - length) < abs(($1.duration ?? 0) - length) }?
             .plainLyrics
         if let plain, let repaired = LyricsRepair.repair(synced: candidates[best].lrc, plain: plain) {
-            return repaired
+            return tagged(repaired, length, track)
         }
-        return candidates[best].lrc
+        return tagged(candidates[best].lrc, length, track)
     }
 
     private static func clean(_ title: String) -> String {
@@ -676,6 +768,12 @@ enum LRC {
             let minutes = Int(time) / 60
             return String(format: "[%02d:%05.2f] %@", minutes, time - Double(minutes * 60), line)
         }.joined(separator: "\n")
+    }
+
+    /// The length of the song lyrics found for a video belong to (see LRCLib.tagged), if noted.
+    static func length(_ lrc: String) -> Double? {
+        guard let m = lrc.firstMatch(of: #/\[length:\s*(\d+):(\d+)\]/#), let min = Double(m.1), let sec = Double(m.2) else { return nil }
+        return min * 60 + sec
     }
 
     static func parse(_ lrc: String) -> [LyricLine] {
@@ -878,11 +976,15 @@ final class NowPlaying: ObservableObject {
 
     /// The song time lyrics are drawn at: playback position plus the animation lead and the user's offset.
     func lyricTime(at date: Date) -> Double {
-        position(at: date) + (isPlaying ? visualLead - outputDelay : 0) + Style.shared.v.offset + AutoSync.shared.offset
+        position(at: date) + (isPlaying ? visualLead - delay : 0) + Style.shared.v.offset + AutoSync.shared.offset
             + SongTiming.shared.offset(track?.id)
     }
 
     var duration: Double { track?.duration ?? 0 }
+
+    /// A browser's video position is already what you're hearing (it keeps the picture in step with the sound,
+    /// headphone delay included), so holding YouTube lyrics back by the delay again made them late.
+    private var delay: Double { track?.id.hasPrefix("youtube:") == true ? 0 : outputDelay }
 
     private func updateActive() {
         inactiveTimer?.cancel()
@@ -900,7 +1002,8 @@ final class NowPlaying: ObservableObject {
         guard let id = track?.id else { return }
         playerQueue.async {
             Player.command(verb, trackID: id)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.poll() }
+            // YouTube has already done it by the time the call returns; the apps take a moment.
+            DispatchQueue.main.asyncAfter(deadline: .now() + (id.hasPrefix("youtube:") ? 0.02 : 0.25)) { self.poll() }
         }
     }
 
@@ -992,6 +1095,18 @@ final class NowPlaying: ObservableObject {
 
     private func loadLyrics(_ track: Track, attempt: Int = 0) {
         untimed = false
+        // A YouTube video the browser won't let Cadence read: no position to time lyrics to.
+        if track.id.hasPrefix(YouTube.setupPrefix) {
+            lyrics = []
+            status = "Turn on Allow JavaScript from Apple Events in the browser (🎤 menu › Set Up YouTube…)"
+            return
+        }
+        // Lyrics you wrote or imported in the editor win over everything.
+        if let mine = UserLyrics.load(track.id), case let parsed = LRC.parse(mine), !parsed.isEmpty {
+            lyrics = parsed
+            status = ""
+            return
+        }
         // Lyrics you timed yourself with tap-to-sync win over anything downloaded.
         if let tapped = SongTiming.shared.tapped(track.id) {
             lyrics = LRC.parse(tapped)
@@ -1071,7 +1186,7 @@ final class NowPlaying: ObservableObject {
 
     private func show(_ lrc: String, _ rank: LRCLib.Rank, for track: Track) {
         let lines = LRC.parse(lrc)
-        guard !lines.isEmpty, SongTiming.shared.tapped(track.id) == nil else { return }
+        guard !lines.isEmpty, SongTiming.shared.tapped(track.id) == nil, !UserLyrics.has(track.id) else { return }
         LyricsStore.save(lrc, for: track.id)
         LyricsStore.setBackup(rank == .backup, track.id)
         cache[track.id] = lines
@@ -1089,7 +1204,7 @@ final class NowPlaying: ObservableObject {
         guard !lrc.contains("<"), backup || !LyricsStore.checked(track.id) else { return }
         Task {
             var answered = false
-            for await found in LRCLib.answers(for: track, above: backup ? .backup : .community) {
+            for await found in LRCLib.answers(for: track, above: backup ? .backup : .community, currentLength: LRC.length(lrc)) {
                 if case .timed(let better, let rank) = found {
                     answered = true
                     await MainActor.run { self.show(better, rank, for: track) }
@@ -1118,8 +1233,9 @@ final class NowPlaying: ObservableObject {
 
     /// A failed download used to leave the last song's wallpaper up for good, so it now retries for about half a
     /// minute while the song is playing. Covers are kept on disk, so a song you've played needs no network at all.
-    private func loadArtwork(_ track: Track, attempt: Int = 1) {
-        guard let url = track.artworkURL else {
+    private func loadArtwork(_ track: Track, attempt: Int = 1, fallback: Bool = false) {
+        guard let url = fallback ? track.artworkFallback : track.artworkURL else {
+            if track.video { return clearArtwork(for: track) }
             playerQueue.async { [weak self] in
                 guard let self else { return }
                 if let data = Player.musicArtworkData(), let image = NSImage(data: data) {
@@ -1130,16 +1246,28 @@ final class NowPlaying: ObservableObject {
             }
             return
         }
-        let file = artworkFolder.appendingPathComponent(url.lastPathComponent)
+        // Every YouTube thumbnail has the same file name, so those are kept under the video's id.
+        let name = track.video ? track.id.replacingOccurrences(of: ":", with: "-") + "-" + url.lastPathComponent
+            : url.lastPathComponent
+        let file = artworkFolder.appendingPathComponent(name)
+        let prepare: (NSImage) -> NSImage = { track.video ? YouTube.withoutLetterbox($0) : $0 }
         if let saved = try? Data(contentsOf: file), let image = NSImage(data: saved) {
-            artworkQueue.async { self.apply(artwork: image, for: track) }
+            artworkQueue.async { self.apply(artwork: prepare(image), for: track) }
             return
         }
         artworkSession.dataTask(with: url) { [weak self] data, response, error in
             guard let self else { return }
             if let data, (response as? HTTPURLResponse)?.statusCode == 200, let image = NSImage(data: data) {
                 try? data.write(to: file, options: .atomic)
-                artworkQueue.async { self.apply(artwork: image, for: track) }
+                artworkQueue.async { self.apply(artwork: prepare(image), for: track) }
+                return
+            }
+            // Not every video has the widest thumbnail; the smaller one always exists.
+            if (response as? HTTPURLResponse)?.statusCode == 404, !fallback, track.artworkFallback != nil {
+                DispatchQueue.main.async {
+                    guard self.track?.id == track.id else { return }
+                    self.loadArtwork(track, fallback: true)
+                }
                 return
             }
             DispatchQueue.main.async {
@@ -1148,7 +1276,7 @@ final class NowPlaying: ObservableObject {
                 guard attempt < 5 else { return self.clearArtwork(for: track) }
                 DispatchQueue.main.asyncAfter(deadline: .now() + pow(2, Double(attempt - 1))) {
                     guard self.track?.id == track.id else { return }
-                    self.loadArtwork(track, attempt: attempt + 1)
+                    self.loadArtwork(track, attempt: attempt + 1, fallback: fallback)
                 }
             }
         }.resume()

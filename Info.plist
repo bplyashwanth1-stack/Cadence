@@ -19,7 +19,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Cadence reads what's playing in Spotify or Apple Music to show synced lyrics.</string>
+	<string>Cadence reads what's playing in Spotify, Apple Music, or YouTube in your browser to show synced lyrics.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Cadence listens to the music playing so the lock-screen visuals move with the beat. Audio is analysed on this Mac and never recorded or sent anywhere.</string>
 </dict>

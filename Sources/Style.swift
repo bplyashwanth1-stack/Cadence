@@ -31,7 +31,7 @@ struct StyleValues: Codable, Equatable {
 
     // Lock screen
     var showOnLockScreen = true
-    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines, reel (poster motion graphics), constellation, fisheye, fisheyevisual
+    var stageLayout = "stack"  // stack (one word at a time, Verci-style), lines, reel (poster motion graphics), constellation, fisheye, fisheyevisual, column, bigword, extrude, matched (the look that goes with the visual)
     var stageFontSize = 150.0
     var stageIcons = true
     var stageDrift = true
@@ -44,6 +44,7 @@ struct StyleValues: Codable, Equatable {
     var titleCard = true  // song title slams in when a new song starts
     var autoSync = true  // correct lyric timing from the audio
     var lyricsBackup = true  // ask NetEase when LRCLIB has nothing
+    var youtube = true  // follow YouTube / YouTube Music playing in a browser
     var matchOutput = true  // hold lyrics back by your headphones' delay
     var learnTiming = true  // learn each song's line and word timing from the audio
     var batterySaver = true  // lighter visuals when unplugged
@@ -72,6 +73,16 @@ struct StyleValues: Codable, Equatable {
 
     // Desktop
     var showOnDesktop = false
+    var lyricColors = "look"  // look (each style's own), album, custom
+    var lyricHex = "#FF5A4F"
+    var harmony = "source"  // source, tonal, analogous, complementary, split, triadic
+    var secondLayout = "same"  // the lyric layout on other displays, or the same as the main one
+    var desktopLayout = "lines"  // the floating desktop lyrics: lines, or any lyric layout
+    var syncLyrics = false  // edited lyrics live in iCloud Drive
+    var translate = false  // a translated line under lyrics in another language
+    var shuffleLooks = false  // each new song picks a favourite look
+    var tintVisuals = true  // the generated visuals take on the album's colour
+    var liveWallpaper = false  // the whole stage as the desktop wallpaper, on every screen, while music plays
     var fontSize = 34.0
     var width = 760.0
     var background = "none"  // none, blur, glass, dim
@@ -95,7 +106,13 @@ final class Style: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "style"),
            let saved = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let values = StyleValues.overDefaults(saved) {
-            v = values.withoutRetiredBackground()
+            var values = values.withoutRetiredBackground()
+            // Edge light became a setting of its own, on by default; presets used to switch it off.
+            if !UserDefaults.standard.bool(forKey: "edgeLightOwnSetting") {
+                values.edgeGlow = true
+                UserDefaults.standard.set(true, forKey: "edgeLightOwnSetting")
+            }
+            v = values
         } else {
             v = StyleValues()
         }
@@ -177,9 +194,24 @@ extension StyleValues {
         return Self.transitionMix[Int(noise(line, 32) * Double(Self.transitionMix.count))]
     }
 
+    /// Lyric layouts drawn by VisualLyricsView (the visual looks and the kinetic styles).
+    static let visualLayouts: Set<String> = Set(["column", "bigword", "extrude", "tape", "matched"]).union(KineticStyles.tags)
+
+    /// Every lyric layout, as (tag, label), for Settings and the menu bar.
+    static let layouts: [(String, String)] = [
+        ("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics"),
+        ("constellation", "Constellation — words joined like stars"), ("fisheye", "Fisheye — a word stack under a glass lens"),
+        ("fisheyevisual", "Fisheye Visual — the lens, with icons"), ("matched", "Matched — the look that goes with each visual"),
+        ("column", "Column — the line in a column, sung word boxed"), ("bigword", "Big Word — one huge word, streaking in"),
+        ("extrude", "Extruded — 3D letters, centred"), ("tape", "Tape — the word on a strip of tape"),
+    ] + KineticStyles.kinds.map { ($0.tag, $0.name) }
+
     static let wallpapers: Set<String> = ["auto", "motion", "mono", "cover", "disc", "duotone", "vinyl", "kaleido",
                                           "polaroid", "cassette", "lake", "cinema", "retro",
-                                          "gallery", "billboard", "crt", "galaxy", "ocean", "mountains", "highway", "neonwall", "aquarium", "forest", "coderain", "newspaper"]
+                                          "gallery", "billboard", "crt", "galaxy", "ocean", "mountains", "highway", "neonwall", "aquarium", "forest", "coderain", "newspaper",
+                                          "nebula", "voxel", "vortex", "chrome", "dotsphere", "hill", "smear", "sunset", "visualmix",
+                                          "contours", "molten", "terraces", "silk", "ink", "tunnel", "wiresea", "city", "ringed", "shoal", "warp",
+                                          "paperbird", "freefall", "lighthall", "tvwall", "lattice", "northern", "dunes", "lagoon", "canyon", "helix", "clockwork", "glassswirl", "gravitywell", "woodgrain"]
 
     /// Backgrounds that no longer exist, for settings and saved presets from older builds.
     func withoutRetiredBackground() -> StyleValues {

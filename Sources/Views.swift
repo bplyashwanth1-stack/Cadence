@@ -556,7 +556,11 @@ struct StageBackground: View {
                 colors[0]
             }
         }
+        // Switching background (a new preset, or by hand) fades across rather than cutting.
+        .id(s.stageBackground)
+        .transition(.opacity)
         .animation(.easeInOut(duration: 1.2), value: player.palette)
+        .animation(.easeInOut(duration: 0.8), value: s.stageBackground)
     }
 }
 
@@ -669,22 +673,28 @@ private func backdropDate(_ date: Date) -> Date {
 }
 
 struct StageBackdrop: View {
+    @Environment(\.isWallpaper) private var wallpaper
+    @Environment(\.stageScreen) private var screen
+    @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
-        let visible = player.stageVisible(s)
-        TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
+        let visible = wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)
+        // The wallpaper runs all the time, so on battery it drops to 15 frames a second.
+        let fps = wallpaper && power.saving ? 15 : power.backdropFPS
+        TimelineView(.animation(minimumInterval: 1 / fps, paused: !visible)) { context in
             let date = backdropDate(context.date)
             let time = player.lyricTime(at: date)
             ZStack {
                 StageBackground(date: date, time: time)
                 StageEffects(date: date, time: time)
-                if s.edgeGlow { EdgeGlow(time: time, date: date) }
+                // On the wallpaper too, unless the desktop edge light (drawn above the windows) is already on.
+                if s.edgeGlow && !(wallpaper && s.edgeDesktop) { EdgeGlow(time: time, date: date) }
                 // The clock lives here, under the cut-out artist; the lyrics layer keeps an invisible copy for layout.
-                if s.stageClock {
+                if s.stageClock && !wallpaper {
                     StageClock(date: date)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 90)
@@ -702,13 +712,16 @@ struct StageBackdrop: View {
 /// drawn in the backdrop, so either way the artist stands in front of the clock, like the iPhone lock screen.
 struct StageDepth: View {
     let overLyrics: Bool
+    @Environment(\.isWallpaper) private var wallpaper
+    @Environment(\.stageScreen) private var screen
+    @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
-        let visible = player.stageVisible(s) && s.depth && s.depthOverLyrics == overLyrics
+        let visible = (wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)) && s.depth && s.depthOverLyrics == overLyrics
             && StyleValues.wallpapers.contains(s.stageBackground)
         TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
             let date = backdropDate(context.date)
@@ -723,19 +736,24 @@ struct StageDepth: View {
 }
 
 struct StageView: View {
+    @Environment(\.isWallpaper) private var wallpaper
+    @Environment(\.stageScreen) private var screen
+    @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
         let s = style.v
-        let visible = player.stageVisible(s)
+        let visible = wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)
+        // Other displays can have a lyric style of their own.
+        let layout = screen > 0 && s.secondLayout != "same" ? s.secondLayout : s.stageLayout
         // 60 fps: at ProMotion's 120 the lyrics cost twice as much for no visible gain.
         TimelineView(.animation(minimumInterval: 1 / power.lyricsFPS, paused: !visible)) { context in
             let time = player.lyricTime(at: context.date)
             ZStack {
                 VStack(alignment: s.horizontal, spacing: 0) {
-                    if s.stageClock { StageClock(date: context.date).frame(maxWidth: .infinity).hidden() }
+                    if s.stageClock && !wallpaper { StageClock(date: context.date).frame(maxWidth: .infinity).hidden() }
                     Spacer(minLength: 0)
                     if TitleCard.showing(player, at: context.date) {
                         TitleCard(date: context.date, time: time)
@@ -746,27 +764,36 @@ struct StageView: View {
                             .font(s.font(size: s.stageFontSize * 0.3))
                             .foregroundStyle(Color.white.opacity(0.6))
                             .frame(maxWidth: .infinity, alignment: s.frameAlignment)
-                    } else if s.stageLayout == "reel" {
-                        ReelLyricsView(time: time, date: context.date)
-                    } else if s.stageLayout == "stack" {
-                        WordStackView(time: time, date: context.date)
-                    } else if s.stageLayout == "fisheye" || s.stageLayout == "fisheyevisual" {
-                        FisheyeView(time: time, date: context.date, icons: s.stageLayout == "fisheyevisual")
+                    } else if StyleValues.visualLayouts.contains(layout) {
+                        VisualLyricsView(time: time, date: context.date)
+                            .environment(\.lyricLayout, layout)
+                            .id(layout)
+                            .transition(.opacity)
                             .layoutPriority(1)
-                    } else if s.stageLayout == "constellation" {
+                    } else if layout == "reel" {
+                        ReelLyricsView(time: time, date: context.date)
+                    } else if layout == "stack" {
+                        WordStackView(time: time, date: context.date)
+                    } else if layout == "fisheye" || layout == "fisheyevisual" {
+                        FisheyeView(time: time, date: context.date, icons: layout == "fisheyevisual")
+                            .layoutPriority(1)
+                    } else if layout == "constellation" {
                         // Takes all the room between the clock and the bar, not an equal share with the spacers.
                         ConstellationView(time: time, date: context.date).layoutPriority(1)
                     } else {
                         LyricsView(time: time)
                     }
+                    TranslationLine(time: time)
                     Spacer(minLength: 0)
                     // Room for the now-playing bar, which lives in its own clickable window.
-                    if s.stageFooter { Color.clear.frame(height: 110) }
+                    if s.stageFooter && !wallpaper { Color.clear.frame(height: 110) }
                 }
                 .padding(.horizontal, 90)
                 .padding(.top, 44)
                 .padding(.bottom, 40)
-                if player.untimed {
+                // A new lyric style fades in over the old one.
+                .animation(.easeInOut(duration: 0.5), value: layout)
+                if player.untimed && !wallpaper {
                     Text("Timing estimated · Tap to Sync fixes it")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .tracking(2)
@@ -775,9 +802,11 @@ struct StageView: View {
                         .padding(.bottom, 140)
                 }
                 // Which preset the ✨ button just switched to, above the now-playing bar.
-                PresetToastView(date: context.date)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 170)
+                if !wallpaper {
+                    PresetToastView(date: context.date)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 170)
+                }
             }
         }
         .environment(\.isStage, true)
@@ -842,6 +871,11 @@ struct OverlayView: View {
                     Text(player.status)
                         .font(.system(size: max(13, s.fontSize * 0.45), weight: .medium, design: .rounded))
                         .foregroundStyle(Color.white.opacity(0.5))
+                } else if StyleValues.visualLayouts.contains(s.desktopLayout) {
+                    VisualLyricsView(time: player.lyricTime(at: context.date), date: context.date)
+                        .environment(\.lyricLayout, s.desktopLayout)
+                        .environment(\.lyricBase, s.fontSize * 2.4)
+                        .frame(height: s.fontSize * 6)
                 } else {
                     LyricsView(time: player.lyricTime(at: context.date))
                 }

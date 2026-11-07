@@ -24,7 +24,7 @@ final class StageWindow: NSWindow {
         // Separate layers so the slow background doesn't redraw at the lyrics' frame rate (see StageBackdrop).
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         for root in [AnyView(StageBackdrop()), AnyView(StageDepth(overLyrics: false)), AnyView(StageView()),
-                     AnyView(StageDepth(overLyrics: true))] {
+                     AnyView(StageDepth(overLyrics: true)), AnyView(TranslationHost())] {
             let hosting = NSHostingView(rootView: root)
             hosting.sizingOptions = []
             hosting.frame = container.bounds
@@ -35,6 +35,40 @@ final class StageWindow: NSWindow {
         orderFrontRegardless()
         LockScreen.attach(self)
     }
+}
+
+/// The stage as a live desktop wallpaper while music plays: above the picture, below the desktop icons and every
+/// window. One per screen, and each screen can show a different visual. Never takes clicks.
+final class WallpaperWindow: NSWindow {
+    init(screen: NSScreen, index: Int) {
+        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        setFrame(screen.frame, display: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        ignoresMouseEvents = true
+        isReleasedWhenClosed = false
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        for root in [AnyView(StageBackdrop()), AnyView(StageDepth(overLyrics: false)), AnyView(StageView()),
+                     AnyView(StageDepth(overLyrics: true))] {
+            let hosting = NSHostingView(rootView: root.environment(\.isWallpaper, true).environment(\.stageScreen, index))
+            hosting.sizingOptions = []
+            hosting.frame = container.bounds
+            hosting.autoresizingMask = [.width, .height]
+            container.addSubview(hosting)
+        }
+        contentView = container
+        orderFrontRegardless()
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: self,
+                                               queue: .main) { [weak self] _ in
+            guard let self else { return }
+            WallpaperVisibility.shared.set(index, visible: self.occlusionState.contains(.visible))
+        }
+    }
+
+    override var canBecomeKey: Bool { false }
 }
 
 /// The edge light around the desktop (off unless enabled). Never takes clicks.
@@ -88,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var controls: ControlsWindow?
     private var overlay: OverlayWindow?
     private var edgeGlow: EdgeGlowWindow?
+    private var wallpapers: [WallpaperWindow] = []
+    private var lyricsEditor: LyricsEditorWindow?
     private var settings: NSWindow?
     private var statusItem: NSStatusItem!
     private var timer: Timer?
@@ -101,16 +137,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ = Fonts.bundled  // registers the bundled fonts before any view uses them
         AutoSync.shared.start()
         buildMenu()
+        // The first time a browser with YouTube open refuses to run Cadence's JavaScript, say how to allow it.
+        NotificationCenter.default.addObserver(forName: .youTubeBlocked, object: nil, queue: .main) { [weak self] note in
+            guard let name = note.object as? String else { return }
+            var told = UserDefaults.standard.stringArray(forKey: "youTubeSetupShown") ?? []
+            guard !told.contains(name) else { return }
+            told.append(name)
+            UserDefaults.standard.set(told, forKey: "youTubeSetupShown")
+            self?.youTubeSetup()
+        }
         buildWindows()
         NotificationCenter.default.addObserver(self, selector: #selector(buildWindows),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
 
         // @Published fires before the value is stored, so react on the next runloop turn.
+        style.$v.map(\.syncLyrics).removeDuplicates().filter { $0 }
+            .sink { _ in UserLyrics.moveToCloud() }
+            .store(in: &subscriptions)
         style.$v.map(\.clickThrough).removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.overlay?.ignoresMouseEvents = $0 }
             .store(in: &subscriptions)
-        style.$v.map { [$0.fontSize, Double($0.linesShown), $0.width, $0.lineSpacing, $0.showHeader ? 1 : 0] }
+        style.$v.map { [$0.fontSize, Double($0.linesShown), $0.width, $0.lineSpacing, $0.showHeader ? 1 : 0,
+                        StyleValues.visualLayouts.contains($0.desktopLayout) ? 1 : 0] }
             .removeDuplicates().dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.resizeOverlay() }
@@ -145,6 +194,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         distributed.addObserver(forName: .init("local.cadence.preview"), object: nil, queue: .main) { [weak self] _ in
             self?.preview()
         }
+        // Scripts can open the lyrics editor and Settings too.
+        distributed.addObserver(forName: .init("local.cadence.editlyrics"), object: nil, queue: .main) { [weak self] _ in
+            self?.openLyricsEditor()
+        }
+        distributed.addObserver(forName: .init("local.cadence.settings"), object: nil, queue: .main) { [weak self] _ in
+            self?.openSettings()
+        }
 
         // Ask for Automation permission up front, then start polling once it's answered.
         DispatchQueue.global().async {
@@ -158,7 +214,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startPolling() {
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.player.poll() }
+        // Every 0.5 s, or 0.25 s for YouTube: reading one tab is quick, and a pause or seek in the browser shows
+        // up that much sooner.
+        var tick = 0
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            tick += 1
+            if tick % 2 == 0 || self.player.track?.id.hasPrefix("youtube") == true { self.player.poll() }
+        }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
         player.poll()
@@ -184,6 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stage?.close()
         controls?.close()
         edgeGlow?.close()
+        wallpapers.forEach { $0.close() }
+        wallpapers = NSScreen.screens.enumerated().map { WallpaperWindow(screen: $1, index: $0) }
         if let screen = NSScreen.screens.first {
             edgeGlow = EdgeGlowWindow(screen: screen)
             stage = StageWindow(screen: screen)
@@ -205,7 +270,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let s = style.v
         let lines = Double(s.linesShown)
         let screenHeight = NSScreen.main?.visibleFrame.height ?? 900
-        let height = s.fontSize * 2.9 * lines + s.lineSpacing * lines + (s.showHeader ? 50 : 0) + 120
+        let styled = StyleValues.visualLayouts.contains(s.desktopLayout)
+        let height = styled ? s.fontSize * 6 + (s.showHeader ? 50 : 0) + 80
+            : s.fontSize * 2.9 * lines + s.lineSpacing * lines + (s.showHeader ? 50 : 0) + 120
         return NSSize(width: s.width + 60, height: min(height, screenHeight * 0.9))
     }
 
@@ -252,25 +319,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.addItem(item("Show on Lock Screen", #selector(toggleLockScreen)))
         menu.addItem(item("Show on Desktop", #selector(toggleDesktop)))
+        menu.addItem(item("Live Wallpaper on Desktop", #selector(toggleWallpaper)))
+        menu.addItem(item("Edge Light", #selector(toggleEdgeLight)))
+        menu.addItem(item("Shuffle Looks Each Song", #selector(toggleShuffle)))
         menu.addItem(item("Preview Lock Screen (10s)", #selector(previewStage)))
         menu.addItem(.separator())
         menu.addItem(presetsMenu())
         menu.addItem(choiceMenu("Lyric Animation", [("mix", "Mix — changes every line")] + StyleValues.wordEffects,
                                 #selector(pickWordStyle(_:))))
-        menu.addItem(choiceMenu("Background", [
+        let covers: [(String, String)] = [
             ("auto", "Auto — cuts between scenes"), ("motion", "Motion wallpaper"), ("mono", "Black & White"), ("cover", "Floating cover"),
             ("disc", "Disc"), ("duotone", "Duotone"), ("vinyl", "Vinyl"), ("kaleido", "Kaleidoscope"),
             ("polaroid", "Polaroid"), ("cassette", "Cassette"), ("lake", "Moonlit Lake"), ("cinema", "Cinema"), ("retro", "Retro Grid"),
-        ] + WorldScene.kinds.map { ($0.tag, $0.name.components(separatedBy: " — ")[0]) } + [
-            ("aurora", "Aurora"), ("black", "Black"),
-        ], #selector(pickBackground(_:))))
-        menu.addItem(choiceMenu("Layout", [("stack", "Word stack"), ("lines", "Lines"), ("reel", "Reel — poster motion graphics"), ("constellation", "Constellation — words joined like stars"), ("fisheye", "Fisheye — a word stack under a glass lens"), ("fisheyevisual", "Fisheye Visual — the lens, with icons")], #selector(pickLayout(_:))))
+        ]
+        let worlds: [(String, String)] = WorldScene.kinds.map { ($0.tag, $0.name.components(separatedBy: " — ")[0]) }
+        let visuals: [(String, String)] = [("visualmix", "Visual Mix — cuts between the visuals")]
+            + Visuals.kinds.map { ($0.tag, $0.name.components(separatedBy: " — ")[0]) }
+        let plain: [(String, String)] = [("aurora", "Aurora"), ("black", "Black")]
+        menu.addItem(choiceMenu("Background", covers + worlds + visuals + plain, #selector(pickBackground(_:))))
+        menu.addItem(choiceMenu("Layout", StyleValues.layouts, #selector(pickLayout(_:))))
         menu.addItem(item("Always Use This Preset for This Song", #selector(pinSong)))
         menu.addItem(item("Always Use This Preset for This Artist", #selector(pinArtist)))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(timingMenu())
+        let hearing = item("⚠︎ Cadence Can't Hear the Music…", #selector(explainAudio))
+        hearing.isHidden = true
+        menu.addItem(hearing)
+        menu.addItem(item("Edit Lyrics…", #selector(openLyricsEditor)))
         menu.addItem(item("Search Lyrics Again", #selector(reloadLyrics)))
+        menu.addItem(item("Set Up YouTube…", #selector(youTubeSetup)))
         menu.addItem(item("Launch at Login", #selector(toggleLogin)))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Cadence", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -303,12 +381,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func fillPresets(_ submenu: NSMenu) {
         submenu.removeAllItems()
-        for preset in Presets.builtIn {
-            let option = item(preset.name, #selector(pickPreset(_:)))
-            option.image = NSImage(systemSymbolName: preset.symbol, accessibilityDescription: nil)
-            option.toolTip = preset.blurb
-            option.representedObject = preset.values(keeping: style.v)
-            submenu.addItem(option)
+        // Favourites right at the top, then one submenu per group.
+        let favourites = PresetMemory.shared.favourites
+        let liked = Presets.all(keeping: style.v).filter { favourites.contains($0.name) }
+        if !liked.isEmpty {
+            submenu.addItem(NSMenuItem.sectionHeader(title: "Favourites"))
+            for preset in liked {
+                let option = item(preset.name, #selector(pickPreset(_:)))
+                option.image = NSImage(systemSymbolName: preset.symbol, accessibilityDescription: nil)
+                option.representedObject = preset.values
+                submenu.addItem(option)
+            }
+            submenu.addItem(.separator())
+        }
+        for group in Presets.grouped {
+            let parent = NSMenuItem(title: group.name, action: nil, keyEquivalent: "")
+            parent.image = NSImage(systemSymbolName: group.symbol, accessibilityDescription: nil)
+            let menu = NSMenu()
+            menu.delegate = self
+            for preset in group.presets {
+                let option = item(preset.name, #selector(pickPreset(_:)))
+                option.image = NSImage(systemSymbolName: preset.symbol, accessibilityDescription: nil)
+                option.toolTip = preset.blurb
+                option.representedObject = preset.values(keeping: style.v)
+                menu.addItem(option)
+            }
+            parent.submenu = menu
+            submenu.addItem(parent)
         }
         let custom = PresetStore.shared.custom
         if !custom.isEmpty { submenu.addItem(.separator()) }
@@ -363,6 +462,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        for entry in menu.items where entry.action == #selector(explainAudio) {
+            entry.isHidden = !(style.v.audioReactive && player.isPlaying && AudioPulse.shared.health() != .fine
+                               && AudioPulse.shared.health() != .notRunning)
+        }
+        for entry in menu.items where entry.action == #selector(youTubeSetup) {
+            entry.isHidden = YouTube.blocked.isEmpty || !style.v.youtube
+        }
         // The timing submenu shows this song's current nudge and only offers what applies.
         if let id = player.track?.id {
             let nudge = SongTiming.shared.offset(id)
@@ -372,12 +478,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     entry.isHidden = nudge == 0
                 }
                 if entry.action == #selector(removeTapped) { entry.isHidden = !SongTiming.shared.tappedIDs.contains(id) }
-                if entry.action == #selector(openTapSync) { entry.isEnabled = !player.lyrics.isEmpty }
+                if entry.action == #selector(openTapSync) || entry.action == #selector(openTapSyncWords) {
+                    entry.isEnabled = !player.lyrics.isEmpty
+                }
             }
         }
         let states: [String: Bool] = [
             "Show on Lock Screen": style.v.showOnLockScreen,
             "Show on Desktop": style.v.showOnDesktop,
+            "Live Wallpaper on Desktop": style.v.liveWallpaper,
+            "Edge Light": style.v.edgeGlow,
+            "Shuffle Looks Each Song": style.v.shuffleLooks,
             "Launch at Login": SMAppService.mainApp.status == .enabled,
         ]
         let chosen: [Selector: String] = [
@@ -402,8 +513,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleLockScreen() { style.v.showOnLockScreen.toggle() }
     @objc private func toggleDesktop() { style.v.showOnDesktop.toggle() }
+    @objc private func toggleWallpaper() { style.v.liveWallpaper.toggle() }
+    @objc private func toggleEdgeLight() { style.v.edgeGlow.toggle() }
+    @objc private func toggleShuffle() { style.v.shuffleLooks.toggle() }
     @objc private func previewStage() { preview() }
     @objc private func reloadLyrics() { player.reloadLyrics() }
+
+    /// How to let each browser that's refusing run Cadence's JavaScript.
+    @objc private func youTubeSetup() {
+        let browsers = YouTube.blocked.isEmpty ? YouTube.browsers.filter { $0.bundleID == "com.google.Chrome" } : YouTube.blocked
+        let alert = NSAlert()
+        alert.messageText = "Let Cadence read YouTube"
+        alert.informativeText = "To follow YouTube, Cadence reads the video's position from the page. "
+            + "Each browser needs one switch turned on for that:\n\n"
+            + browsers.map { "• \($0.setting)" }.joined(separator: "\n\n")
+            + "\n\nLyrics start as soon as it's on — no restart needed."
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
     @objc private func pinSong() { PresetMemory.shared.togglePin(player.track, artist: false) }
     @objc private func pinArtist() { PresetMemory.shared.togglePin(player.track, artist: true) }
 
@@ -420,6 +548,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(item("Reset This Song", #selector(resetSongTiming)))
         submenu.addItem(.separator())
         submenu.addItem(item("Tap to Sync This Song…", #selector(openTapSync)))
+        submenu.addItem(item("Tap to Sync Word by Word…", #selector(openTapSyncWords)))
         submenu.addItem(item("Remove My Tapped Timing", #selector(removeTapped)))
         parent.submenu = submenu
         return parent
@@ -435,8 +564,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         player.reloadLyrics()
     }
 
-    @objc private func openTapSync() {
-        guard let session = TapSync(player: player) else { return }
+    /// What to do when the music can't be heard, depending on how it's failing.
+    @objc private func explainAudio() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Cadence can't hear the music"
+        if AudioPulse.shared.health() == .silent {
+            alert.informativeText = "Sound reaches Cadence as silence, which usually means the System Audio Recording permission is off. Turn Cadence on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen Cadence. Until then, visuals follow the lyric timing instead of the beat."
+            alert.addButton(withTitle: "Open Privacy Settings")
+        } else {
+            alert.informativeText = "macOS's audio service isn't sending Cadence any sound. Restarting it usually fixes this: paste the copied command into Terminal and enter your password (sound drops out for a second). Until then, visuals follow the lyric timing instead of the beat."
+            alert.addButton(withTitle: "Copy Fix Command")
+        }
+        alert.addButton(withTitle: "Close")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if AudioPulse.shared.health() == .silent {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
+        } else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("sudo killall coreaudiod", forType: .string)
+        }
+    }
+
+    @objc private func openLyricsEditor() {
+        if lyricsEditor == nil { lyricsEditor = LyricsEditorWindow() }
+        NSApp.activate(ignoringOtherApps: true)
+        lyricsEditor?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func openTapSyncWords() { startTapSync(byWord: true) }
+
+    @objc private func openTapSync() { startTapSync(byWord: false) }
+
+    private func startTapSync(byWord: Bool) {
+        guard let session = TapSync(player: player, byWord: byWord) else { return }
         tapSync?.close()
         let window = TapSyncWindow(session: session)
         tapSync = window

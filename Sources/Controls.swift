@@ -7,6 +7,27 @@ extension NowPlaying {
     func stageVisible(_ s: StyleValues) -> Bool {
         s.showOnLockScreen && ((active && locked) || previewing)
     }
+
+    /// The stage as the desktop wallpaper: while music plays and the Mac is unlocked.
+    func wallpaperVisible(_ s: StyleValues) -> Bool {
+        s.liveWallpaper && isPlaying && !locked && !previewing
+    }
+
+    /// The wallpaper on one screen, only while it can be seen.
+    func wallpaperVisible(_ s: StyleValues, screen: Int) -> Bool {
+        wallpaperVisible(s) && !WallpaperVisibility.shared.hidden.contains(screen)
+    }
+}
+
+/// Which screens' wallpapers can actually be seen. A wallpaper hidden behind a full-screen app or covering
+/// windows stops drawing, so it costs nothing while you can't see it.
+final class WallpaperVisibility: ObservableObject {
+    static let shared = WallpaperVisibility()
+    @Published private(set) var hidden: Set<Int> = []
+
+    func set(_ screen: Int, visible: Bool) {
+        if visible { hidden.remove(screen) } else { hidden.insert(screen) }
+    }
 }
 
 final class HoverState: ObservableObject {
@@ -142,6 +163,10 @@ struct NowPlayingBar: View {
                 button("chevron.right", size: 15) { Presets.step(1) }
                     .help("Next preset")
             }
+            Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 28)
+            button(style.v.edgeGlow ? "light.max" : "light.min", size: 18) { style.v.edgeGlow.toggle() }
+                .opacity(style.v.edgeGlow ? 1 : 0.45)
+                .help(style.v.edgeGlow ? "Turn the edge light off" : "Turn the edge light on")
         }
         .padding(.leading, 4)
     }
@@ -191,21 +216,27 @@ struct PresetList: View {
     @ObservedObject private var player = NowPlaying.shared
 
     var body: some View {
-        let list = Presets.all(keeping: style.v)
+        let sections = Presets.sections(keeping: style.v)
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         VStack(spacing: 0) {
             ScrollViewReader { scroller in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 2) {
-                        ForEach(list, id: \.name) { preset in
-                            row(preset.name, preset.symbol, preset.values).id(preset.name)
+                        ForEach(sections, id: \.name) { section in
+                            header(section.name, section.symbol, section.items.count)
+                            if isOpen(section) {
+                                ForEach(section.items, id: \.name) { preset in
+                                    row(preset.name, preset.symbol, preset.values).id("\(section.name)/\(preset.name)")
+                                }
+                            }
                         }
                     }
                     .padding(8)
                 }
                 .onAppear {
-                    if let current = list.first(where: { $0.values == style.v }) {
-                        scroller.scrollTo(current.name, anchor: .center)
+                    if let section = sections.first(where: { $0.items.contains { $0.values == style.v } }),
+                       let current = section.items.first(where: { $0.values == style.v }) {
+                        scroller.scrollTo("\(section.name)/\(current.name)", anchor: .center)
                     }
                 }
             }
@@ -247,6 +278,41 @@ struct PresetList: View {
         .help("Always use this preset for \(label.lowercased())")
     }
 
+    /// Groups start folded, except Favourites and the one holding the current look; a tap opens or folds one.
+    @State private var toggled: Set<String> = []
+
+    private func isOpen(_ section: (name: String, symbol: String, items: [Presets.Item])) -> Bool {
+        let natural = section.name == "Favourites" || section.items.contains { $0.values == style.v }
+        return natural != toggled.contains(section.name)
+    }
+
+    private func header(_ name: String, _ symbol: String, _ count: Int) -> some View {
+        let sections = Presets.sections(keeping: style.v)
+        let open = sections.first { $0.name == name }.map(isOpen) ?? false
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if toggled.contains(name) { toggled.remove(name) } else { toggled.insert(name) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).frame(width: 22)
+                Text(name).font(.system(size: 13, weight: .bold, design: .rounded))
+                Text("\(count)").font(.system(size: 12, weight: .medium, design: .rounded)).opacity(0.5)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .foregroundStyle(Color.white.opacity(0.85))
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.06)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .padding(.top, 4)
+    }
+
     private func row(_ name: String, _ symbol: String, _ values: StyleValues) -> some View {
         let selected = values == style.v
         let favourite = memory.favourites.contains(name)
@@ -256,7 +322,8 @@ struct PresetList: View {
                 hover.presetsOpen = false
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: symbol).frame(width: 22)
+                    PresetThumb(values: values, symbol: symbol, size: CGSize(width: 40, height: 24))
+                        .frame(width: 40)
                     Text(name).lineLimit(1)
                     Spacer(minLength: 0)
                     if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
@@ -318,7 +385,7 @@ final class ControlsWindow: NSPanel {
     private var opening: AnyCancellable?
 
     init(screen: NSScreen) {
-        let size = NSSize(width: 800, height: Self.barHeight)
+        let size = NSSize(width: 860, height: Self.barHeight)
         let frame = NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.minY + 34,
                            width: size.width, height: size.height)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
