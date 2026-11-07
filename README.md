@@ -27,6 +27,9 @@ over a moving wallpaper made from the album art that hits on the beat.
 - **A different style on other displays**, and any style for the floating desktop lyrics too.
 - **Edit Lyrics…** — fix a line or a timestamp, paste in your own, or import a .lrc or .txt file. Your version
   is used for that song from then on; Use Downloaded Lyrics goes back.
+  Turn on iCloud Drive sync to have your edits on your other Macs too.
+- **Translation** — lyrics in another language can show a translated line underneath, made on your Mac
+  (macOS 15 or later).
 - **Hindi/Telugu in English letters**, spelled the way people type them ("premapichchi", not "premapicci").
 
 **Backgrounds**
@@ -59,7 +62,8 @@ over a moving wallpaper made from the album art that hits on the beat.
 Love Letter, Glitchcore, Movie Subs, Galaxy, Highlighter, Sad Hours, Golden Hour, Y2K,
 Polaroid Days, Mixtape, Moonlit, Late Show, Synthwave, Snow Globe, Monsoon, Sakura, Festival, Bubblegum, Stadium,
 Ripple, and 24 more, from Art Gallery to Zen Garden), plus your own. Switch from the menu bar, or on the lock screen itself: ✨ opens the list, and the arrows beside it step through them.
-Heart your favourites to put them first and keep the arrows among them, and pin a preset to a song or artist
+Presets come in groups, with a preview of each visual that moves when you point at it; turn on **Shuffle**
+to give every new song a different favourite look. Heart your favourites to put them first and keep the arrows among them, and pin a preset to a song or artist
 to have it come back whenever they play.
 
 **Getting the lyrics right**
@@ -79,6 +83,7 @@ to have it come back whenever they play.
   and starts slow word effects sooner than quick ones so they all land with the voice.
 - **Lyrics repair** — when the timed upload is missing lines or mangled, Cadence rebuilds it from the
   complete untimed lyrics, borrowing the timestamps.
+- **Word by word** — Tap to Sync Word by Word times each word, so the kinetic styles land exactly.
 - **Your fixes stick** — nudge a song's timing (menu bar → This Song's Timing) and Cadence remembers it for
   that song. For a truly broken one, **Tap to Sync**: play it once, press Space as each line starts, and
   your timing is used from then on.
@@ -94,7 +99,7 @@ to have it come back whenever they play.
 - Play/pause, next, previous and scrubbing on the lock screen control the tab.
 - Spotify and Music come first when they're playing. Turn it off in Settings › YouTube.
 
-**Also** — clock, now-playing bar with controls and scrubbing, battery saver (lighter visuals when unplugged),
+**Also** — a warning in the menu bar when Cadence can't hear the music, with the fix; clock, now-playing bar with controls and scrubbing, battery saver (lighter visuals when unplugged),
 keeps the display awake while lyrics play, optional floating lyrics on the desktop, 21 bundled fonts plus every
 font on the Mac.
 
