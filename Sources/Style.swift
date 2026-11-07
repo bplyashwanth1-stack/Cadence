@@ -73,6 +73,7 @@ struct StyleValues: Codable, Equatable {
 
     // Desktop
     var showOnDesktop = false
+    var myFont = false  // your font, weight and italic for every lyric style, not just the plain ones
     var lyricColors = "look"  // look (each style's own), album, custom
     var lyricHex = "#FF5A4F"
     var harmony = "source"  // source, tonal, analogous, complementary, split, triadic

@@ -50,6 +50,13 @@ extension StyleValues {
         v.showOnDesktop = c.showOnDesktop
         v.liveWallpaper = c.liveWallpaper
         v.shuffleLooks = c.shuffleLooks
+        v.myFont = c.myFont
+        if c.myFont {
+            // Your font stays as you chose it whichever preset you pick.
+            v.fontFamily = c.fontFamily
+            v.fontWeight = c.fontWeight
+            v.italic = c.italic
+        }
         v.syncLyrics = c.syncLyrics
         v.translate = c.translate
         v.tintVisuals = c.tintVisuals

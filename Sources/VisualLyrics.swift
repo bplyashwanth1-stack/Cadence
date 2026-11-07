@@ -138,6 +138,11 @@ struct VisualLook {
             look = VisualLook.from(s, layout: layout, palette: palette)
         }
         look.harmonize(s, palette)
+        if s.myFont {
+            look.family = s.fontFamily
+            look.weight = s.fontWeight
+            look.italic = s.italic
+        }
         return look
     }
 

@@ -322,6 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Live Wallpaper on Desktop", #selector(toggleWallpaper)))
         menu.addItem(item("Edge Light", #selector(toggleEdgeLight)))
         menu.addItem(item("Shuffle Looks Each Song", #selector(toggleShuffle)))
+        menu.addItem(fontMenu())
         menu.addItem(item("Preview Lock Screen (10s)", #selector(previewStage)))
         menu.addItem(.separator())
         menu.addItem(presetsMenu())
@@ -495,6 +496,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             #selector(pickWordStyle(_:)): style.v.wordStyle,
             #selector(pickBackground(_:)): style.v.stageBackground,
             #selector(pickLayout(_:)): style.v.stageLayout,
+            #selector(pickFont(_:)): style.v.myFont ? style.v.fontFamily : "",
         ]
         if menu.items.contains(where: { $0.action == #selector(savePreset) }) { fillPresets(menu) }
         for item in menu.items where item.action == #selector(pinSong) || item.action == #selector(pinArtist) {
@@ -516,6 +518,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleWallpaper() { style.v.liveWallpaper.toggle() }
     @objc private func toggleEdgeLight() { style.v.edgeGlow.toggle() }
     @objc private func toggleShuffle() { style.v.shuffleLooks.toggle() }
+
+    /// The featured fonts, quick to reach from the menu bar; each shows in its own typeface.
+    private func fontMenu() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Lyrics Font", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.delegate = self
+        let own = item("Each Style's Own Font", #selector(pickFont(_:)))
+        own.representedObject = ""
+        submenu.addItem(own)
+        submenu.addItem(.separator())
+        for family in Fonts.featured {
+            let option = item(family, #selector(pickFont(_:)))
+            option.representedObject = family
+            if let font = NSFont(name: family, size: 14) ?? NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: 14) {
+                option.attributedTitle = NSAttributedString(string: family, attributes: [.font: font])
+            }
+            submenu.addItem(option)
+        }
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func pickFont(_ sender: NSMenuItem) {
+        guard let family = sender.representedObject as? String else { return }
+        if family.isEmpty {
+            style.v.myFont = false
+        } else {
+            style.v.fontFamily = family
+            style.v.myFont = true
+        }
+    }
     @objc private func previewStage() { preview() }
     @objc private func reloadLyrics() { player.reloadLyrics() }
 

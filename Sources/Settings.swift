@@ -299,8 +299,15 @@ struct SettingsView: View {
 
     private var font: some View {
         Section("Font") {
-            FontGallery(selection: $style.v.fontFamily, weight: style.v.fontWeight, italic: style.v.italic)
-            Picker("All installed fonts", selection: $style.v.fontFamily) {
+            Toggle("Use my font for every style (presets keep it too)", isOn: $style.v.myFont)
+            if !style.v.myFont {
+                Text("Off: the visual looks and presets use the font they were designed with.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            // Picking a font means you want to see it, so it switches "use my font" on.
+            let family = Binding(get: { style.v.fontFamily }, set: { style.v.fontFamily = $0; style.v.myFont = true })
+            FontGallery(selection: family, weight: style.v.fontWeight, italic: style.v.italic)
+            Picker("All installed fonts", selection: family) {
                 ForEach(Fonts.system + Fonts.all, id: \.self) { Text($0).tag($0) }
             }
         }
