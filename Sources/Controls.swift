@@ -74,7 +74,7 @@ struct NowPlayingBar: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if hover.lyricsOpen {
-                LyricsTools()
+                LyricStylePanel()
                     .padding(.bottom, ControlsWindow.barHeight - 6)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, 30)
@@ -183,8 +183,8 @@ struct NowPlayingBar: View {
             button(style.v.edgeGlow ? "light.max" : "light.min", size: 18) { style.v.edgeGlow.toggle() }
                 .opacity(style.v.edgeGlow ? 1 : 0.45)
                 .help(style.v.edgeGlow ? "Turn the edge light off" : "Turn the edge light on")
-            button("text.quote", size: 18) { hover.lyricsOpen.toggle() }
-                .help("Fix the lyrics: timing, search again, or edit")
+            button("textformat", size: 18) { hover.lyricsOpen.toggle() }
+                .help("Lyric style, font and fixes")
         }
         .padding(.leading, 4)
     }
@@ -472,16 +472,7 @@ struct LyricsTools: View {
                  "square.and.pencil") { hover.editAfterUnlock.toggle() }
         }
         .foregroundStyle(Color.white)
-        .padding(10)
-        .frame(width: 270)
-        .background {
-            ZStack {
-                VisualEffect()
-                Color.black.opacity(0.45)
-            }
-            .clipShape(shape)
-        }
-        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+        let _ = shape
     }
 
     private func tool(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
@@ -492,6 +483,108 @@ struct LyricsTools: View {
                 .frame(height: 34)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.1)))
                 .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+}
+
+/// The lyric style panel above the bar: pick a style or a font, or fix this song's lyrics — all by clicking.
+struct LyricStylePanel: View {
+    @ObservedObject private var style = Style.shared
+    @ObservedObject private var hover = HoverState.shared
+    @State private var tab = "style"
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                tabButton("Style", "style")
+                tabButton("Font", "font")
+                tabButton("Fix", "fix")
+            }
+            ScrollViewReader { scroller in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 2) {
+                        switch tab {
+                        case "font": fonts
+                        case "fix": LyricsTools()
+                        default: styles
+                        }
+                    }
+                }
+                .onAppear { scroller.scrollTo(style.v.stageLayout, anchor: .center) }
+            }
+        }
+        .foregroundStyle(Color.white)
+        .padding(8)
+        .frame(width: 290, height: ControlsWindow.listHeight - 10)
+        .background {
+            ZStack {
+                VisualEffect()
+                Color.black.opacity(0.45)
+            }
+            .clipShape(shape)
+        }
+        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+    }
+
+    private func tabButton(_ label: String, _ tag: String) -> some View {
+        Button { tab = tag } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(tab == tag ? 0.25 : 0.06)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private var styles: some View {
+        ForEach(StyleValues.layouts, id: \.0) { tag, label in
+            row(label.components(separatedBy: " — ")[0], detail: label.components(separatedBy: " — ").dropFirst().first,
+                selected: style.v.stageLayout == tag) {
+                style.v.stageLayout = tag
+            }
+            .id(tag)
+        }
+    }
+
+    private var fonts: some View {
+        Group {
+            row("Each style's own font", detail: "As the style was designed", selected: !style.v.myFont) {
+                style.v.myFont = false
+            }
+            ForEach(Fonts.featured, id: \.self) { family in
+                row(family, font: family, selected: style.v.myFont && style.v.fontFamily == family) {
+                    style.v.fontFamily = family
+                    style.v.myFont = true
+                }
+            }
+        }
+    }
+
+    private func row(_ title: String, detail: String? = nil, font: String? = nil, selected: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(font.map { StyleValues.font(family: $0, size: 15, weight: .regular, italic: false) }
+                              ?? .system(size: 14, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                    if let detail {
+                        Text(detail).font(.system(size: 11, weight: .medium, design: .rounded)).opacity(0.55).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 38)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(selected ? 0.18 : 0)))
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
     }

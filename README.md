@@ -135,8 +135,8 @@ time it finds YouTube open, and **Set Up YouTube…** in the menu shows it again
 - **Preview Lock Screen (10s)** shows the lock-screen view on the desktop. From a terminal:
   `swift scripts/preview.swift`.
 - Lock the Mac (Ctrl+Cmd+Q) with music playing. Hover the bottom bar for playback controls, ✨ to change
-  preset, 💡 for the edge light, and the quote button for lyrics fixes: move the timing earlier or later, search
-  again, or have the editor open when you unlock (you can't type on the lock screen). You can type your password or use Touch ID as usual.
+  preset, 💡 for the edge light, and **Aa** to change the lyric style or font right there, or fix the song's lyrics
+  (move the timing, search again, or have the editor open when you unlock; you can't type on the lock screen). You can type your password or use Touch ID as usual.
 - Logs go to `~/Library/Logs/Cadence.log`.
 
 ## Project layout
