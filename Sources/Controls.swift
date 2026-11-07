@@ -33,9 +33,17 @@ final class WallpaperVisibility: ObservableObject {
 final class HoverState: ObservableObject {
     static let shared = HoverState()
     @Published var hovering = false {
-        didSet { if !hovering { presetsOpen = false } }
+        didSet { if !hovering { presetsOpen = false; lyricsOpen = false } }
     }
-    @Published var presetsOpen = false
+    @Published var presetsOpen = false {
+        didSet { if presetsOpen { lyricsOpen = false } }
+    }
+    /// The lyrics tools above the bar (only one panel at a time).
+    @Published var lyricsOpen = false {
+        didSet { if lyricsOpen { presetsOpen = false } }
+    }
+    /// Open the lyrics editor as soon as the Mac is unlocked (typing isn't possible on the lock screen).
+    @Published var editAfterUnlock = false
 }
 
 private func timeString(_ seconds: Double) -> String {
@@ -65,10 +73,18 @@ struct NowPlayingBar: View {
                     .padding(.trailing, 30)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            if hover.lyricsOpen {
+                LyricsTools()
+                    .padding(.bottom, ControlsWindow.barHeight - 6)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 30)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .opacity(visible ? 1 : 0)
         .animation(.easeInOut(duration: 0.6), value: visible)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hover.presetsOpen)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hover.lyricsOpen)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
@@ -167,6 +183,8 @@ struct NowPlayingBar: View {
             button(style.v.edgeGlow ? "light.max" : "light.min", size: 18) { style.v.edgeGlow.toggle() }
                 .opacity(style.v.edgeGlow ? 1 : 0.45)
                 .help(style.v.edgeGlow ? "Turn the edge light off" : "Turn the edge light on")
+            button("text.quote", size: 18) { hover.lyricsOpen.toggle() }
+                .help("Fix the lyrics: timing, search again, or edit")
         }
         .padding(.leading, 4)
     }
@@ -385,7 +403,7 @@ final class ControlsWindow: NSPanel {
     private var opening: AnyCancellable?
 
     init(screen: NSScreen) {
-        let size = NSSize(width: 860, height: Self.barHeight)
+        let size = NSSize(width: 920, height: Self.barHeight)
         let frame = NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.minY + 34,
                            width: size.width, height: size.height)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -404,8 +422,9 @@ final class ControlsWindow: NSPanel {
         contentView = hosting
         orderFrontRegardless()
         LockScreen.attach(self)
-        // Grows upward for the preset list, then shrinks so it isn't covering anything the rest of the time.
-        opening = HoverState.shared.$presetsOpen.removeDuplicates().sink { [weak self] open in
+        // Grows upward for the preset list or lyrics tools, then shrinks so it isn't covering anything otherwise.
+        opening = HoverState.shared.$presetsOpen.combineLatest(HoverState.shared.$lyricsOpen)
+            .map { $0 || $1 }.removeDuplicates().sink { [weak self] open in
             guard let self else { return }
             var frame = self.frame
             frame.size.height = Self.barHeight + (open ? Self.listHeight : 0)
@@ -414,4 +433,66 @@ final class ControlsWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool { false }
+}
+
+/// Lyrics fixes that work by clicking, for the lock screen where you can't type: move the timing, look for other
+/// lyrics, or have the editor open the moment you unlock.
+struct LyricsTools: View {
+    @ObservedObject private var hover = HoverState.shared
+    @ObservedObject private var player = NowPlaying.shared
+    @ObservedObject private var timing = SongTiming.shared
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let id = player.track?.id
+        let nudge = id.map { timing.offset($0) } ?? 0
+        VStack(alignment: .leading, spacing: 6) {
+            Text("This song's lyrics")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .opacity(0.7)
+                .padding(.horizontal, 6)
+            HStack(spacing: 6) {
+                tool("Earlier", "backward.end.fill") { id.map { timing.nudge($0, by: 0.25) } }
+                tool("Later", "forward.end.fill") { id.map { timing.nudge($0, by: -0.25) } }
+            }
+            Text(nudge == 0 ? "Timing as found"
+                 : String(format: "%.2f s %@", abs(nudge), nudge > 0 ? "earlier" : "later"))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .opacity(0.6)
+                .frame(maxWidth: .infinity)
+            tool("Reset timing", "arrow.uturn.backward") { id.map { timing.set(0, for: $0) } }
+                .disabled(nudge == 0)
+                .opacity(nudge == 0 ? 0.4 : 1)
+            tool("Search lyrics again", "magnifyingglass") {
+                player.reloadLyrics()
+                hover.lyricsOpen = false
+            }
+            tool(hover.editAfterUnlock ? "Editor opens when you unlock ✓" : "Edit lyrics when I unlock",
+                 "square.and.pencil") { hover.editAfterUnlock.toggle() }
+        }
+        .foregroundStyle(Color.white)
+        .padding(10)
+        .frame(width: 270)
+        .background {
+            ZStack {
+                VisualEffect()
+                Color.black.opacity(0.45)
+            }
+            .clipShape(shape)
+        }
+        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+    }
+
+    private func tool(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: symbol)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .frame(height: 34)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.1)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+    }
 }

@@ -185,6 +185,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
             self?.player.locked = false
+            // Asked for from the lock screen, where typing isn't possible.
+            if HoverState.shared.editAfterUnlock {
+                HoverState.shared.editAfterUnlock = false
+                self?.openLyricsEditor()
+            }
         }
         // Lets scripts trigger the preview: post "local.cadence.preview" as a distributed notification.
         // Settings' "Tap to sync this song…" button.
