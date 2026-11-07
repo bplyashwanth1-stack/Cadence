@@ -542,6 +542,19 @@ struct LyricStylePanel: View {
     }
 
     private var styles: some View {
+        let original = Presets.defaultLayout(for: style.v)
+        let name = StyleValues.layouts.first { $0.0 == original.layout }?.1.components(separatedBy: " — ")[0] ?? original.layout
+        return Group {
+            row("Default", detail: original.preset.map { "\(name), from \($0)" } ?? "\(name), Cadence's original",
+                selected: style.v.stageLayout == original.layout) {
+                style.v.stageLayout = original.layout
+            }
+            Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1).padding(.vertical, 4)
+            allStyles
+        }
+    }
+
+    private var allStyles: some View {
         ForEach(StyleValues.layouts, id: \.0) { tag, label in
             row(label.components(separatedBy: " — ")[0], detail: label.components(separatedBy: " — ").dropFirst().first,
                 selected: style.v.stageLayout == tag) {
@@ -553,7 +566,7 @@ struct LyricStylePanel: View {
 
     private var fonts: some View {
         Group {
-            row("Each style's own font", detail: "As the style was designed", selected: !style.v.myFont) {
+            row("Default", detail: "Each style's own font, as designed", selected: !style.v.myFont) {
                 style.v.myFont = false
             }
             ForEach(Fonts.featured, id: \.self) { family in

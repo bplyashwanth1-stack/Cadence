@@ -529,7 +529,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let parent = NSMenuItem(title: "Lyrics Font", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         submenu.delegate = self
-        let own = item("Each Style's Own Font", #selector(pickFont(_:)))
+        let own = item("Default (Each Style's Own Font)", #selector(pickFont(_:)))
         own.representedObject = ""
         submenu.addItem(own)
         submenu.addItem(.separator())

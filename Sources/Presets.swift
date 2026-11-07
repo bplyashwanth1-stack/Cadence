@@ -974,6 +974,25 @@ extension Presets {
         return list.filter { favourites.contains($0.name) } + list.filter { !favourites.contains($0.name) }
     }
 
+    /// The lyric style your look started with: the style of the preset it matches once the lyric style and font
+    /// are set aside (so changing them doesn't lose track of it), or Cadence's own default otherwise.
+    static func defaultLayout(for current: StyleValues) -> (layout: String, preset: String?) {
+        func plain(_ v: StyleValues) -> StyleValues {
+            var v = v
+            v.stageLayout = ""
+            v.myFont = false
+            v.fontFamily = ""
+            v.fontWeight = ""
+            v.italic = false
+            return v
+        }
+        let target = plain(current)
+        if let match = all(keeping: current).first(where: { plain($0.values) == target }) {
+            return (match.values.stageLayout, match.name)
+        }
+        return (StyleValues().stageLayout, nil)
+    }
+
     /// The name of the preset the current look matches, if any.
     static func current() -> String? {
         all(keeping: Style.shared.v).first { $0.values == Style.shared.v }?.name

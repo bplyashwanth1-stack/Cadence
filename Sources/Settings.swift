@@ -140,6 +140,12 @@ struct SettingsView: View {
             Picker("Layout", selection: $style.v.stageLayout) {
                 ForEach(StyleValues.layouts, id: \.0) { Text($0.1).tag($0.0) }
             }
+            let original = Presets.defaultLayout(for: style.v)
+            if style.v.stageLayout != original.layout {
+                Button("Back to the default style (\(original.preset ?? "Cadence's original"))") {
+                    style.v.stageLayout = original.layout
+                }
+            }
             Picker("Other displays", selection: $style.v.secondLayout) {
                 Text("Same as this one").tag("same")
                 Divider()
