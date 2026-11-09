@@ -150,6 +150,9 @@ time it finds YouTube open, and **Set Up YouTube…** in the menu shows it again
 - Safari: **Settings › Advanced › Show features for web developers**, then **Developer › Allow JavaScript from
   Apple Events**
 
+To ship a new version, run `scripts/release.sh 1.2`. It bumps the version, tags it, waits for GitHub to build
+and publish `Cadence.zip`, and updates the Homebrew formula.
+
 ## Using it
 
 - Menu bar 🎤 → **Presets**, **Lyric Animation**, **Background**, **Layout**, or **Settings…** for everything.

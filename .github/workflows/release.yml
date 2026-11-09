@@ -32,6 +32,7 @@ jobs:
           cp Info.plist "$APP/Contents/"
           VERSION="${TAG#v}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
           cp Fonts/*.ttf "$APP/Contents/Resources/Fonts/"
           # One app for both Apple silicon and Intel: build each, then join them.
           swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o build/Cadence-arm64 & arm=$!
@@ -39,7 +40,35 @@ jobs:
           wait $arm; wait $intel
           lipo -create build/Cadence-arm64 build/Cadence-x86_64 -output "$APP/Contents/MacOS/Cadence"
           lipo -info "$APP/Contents/MacOS/Cadence"
-          codesign --force --sign - "$APP"
+
+      # Every release is signed with the same self-signed certificate, so macOS keeps the app's permissions
+      # (Spotify/Music control, system audio) across updates. Without the secrets, it falls back to ad-hoc.
+      - name: Sign
+        env:
+          CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          set -e
+          APP=build/Cadence.app
+          if [ -z "$CERT_P12" ]; then
+            echo "::warning::No signing certificate secret; signing ad-hoc"
+            codesign --force --sign - "$APP"
+          else
+            KC="$RUNNER_TEMP/signing.keychain-db"
+            KCPASS=$(openssl rand -hex 16)
+            echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "$KCPASS" "$KC"
+            security set-keychain-settings "$KC"
+            security unlock-keychain -p "$KCPASS" "$KC"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$CERT_PASSWORD" -T /usr/bin/codesign >/dev/null
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPASS" "$KC" >/dev/null
+            security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+            rm "$RUNNER_TEMP/cert.p12"
+            IDENTITY=$(security find-certificate -c "Cadence Release Signing" -Z "$KC" | awk '/SHA-1/ { print $3 }')
+            codesign --force --sign "$IDENTITY" "$APP"
+          fi
+          codesign --verify --deep --strict "$APP"
+          codesign -d -r- "$APP"
           ditto -c -k --keepParent "$APP" build/Cadence.zip
 
       - name: Publish release
