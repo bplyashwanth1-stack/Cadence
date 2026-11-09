@@ -138,6 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AutoSync.shared.start()
         buildMenu()
         UpdateChecker.shared.start()
+        // macOS can hide the 🎤 icon (switched off in Settings › Menu Bar, or no room beside the notch); say so once.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.explainHiddenIconIfNeeded() }
         // The first time a browser with YouTube open refuses to run Cadence's JavaScript, say how to allow it.
         NotificationCenter.default.addObserver(forName: .youTubeBlocked, object: nil, queue: .main) { [weak self] note in
             guard let name = note.object as? String else { return }
@@ -654,6 +656,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tapSync = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// When the 🎤 icon isn't on screen after launch, explains how to get it back, once per hiding.
+    private func explainHiddenIconIfNeeded() {
+        let shown = statusItem.button?.window?.occlusionState.contains(.visible) ?? false
+        let key = "hiddenIconExplained"
+        guard !shown else { UserDefaults.standard.set(false, forKey: key); return }
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        Log.write("menu bar icon isn't visible")
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Cadence's 🎤 icon is hidden"
+        alert.informativeText = "Cadence is running, but macOS isn't showing its menu bar icon. Either Cadence is switched off under System Settings › Menu Bar › Allow in the Menu Bar, or the menu bar is too full and the icon is behind the camera notch (quit a few menu bar apps, or ⌘-drag icons to make room).\n\nYou can always open Cadence again from Applications to get its settings."
+        alert.addButton(withTitle: "Open Menu Bar Settings")
+        alert.addButton(withTitle: "Open Cadence Settings")
+        alert.addButton(withTitle: "OK")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension")!)
+        case .alertSecondButtonReturn:
+            openSettings()
+        default:
+            break
+        }
+    }
+
+    /// Opening Cadence again while it runs (from Applications, Spotlight or Launchpad) shows Settings, so it's
+    /// reachable even when the menu bar is full and macOS hides the 🎤 icon behind the notch.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings()
+        return false
     }
 
     @objc private func openSettings() {

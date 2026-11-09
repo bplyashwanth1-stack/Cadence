@@ -162,6 +162,9 @@ and publish `Cadence.zip`, and updates the Homebrew formula.
   preset, 💡 for the edge light, and **Aa** to change the lyric style or font right there, or fix the song's lyrics
   (move the timing, search again, or have the editor open when you unlock; you can't type on the lock screen). You can type your password or use Touch ID as usual.
 - Logs go to `~/Library/Logs/Cadence.log`.
+- Can't see the 🎤 icon? Turn Cadence on under **System Settings › Menu Bar › Allow in the Menu Bar**, or make
+  room if the menu bar is full and the icon is behind the notch. Opening Cadence again from Applications always
+  shows its settings.
 
 ## Project layout
 
