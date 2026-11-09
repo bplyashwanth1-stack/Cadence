@@ -49,6 +49,15 @@ final class AudioPulse {
     private var lastLevel = Date.distantPast
     private var lastCallback = Date.distantPast
     private var startedAt = Date.distantPast
+    /// Receives the raw samples while a clip records (interleaved floats, frames, channels, sample rate).
+    typealias ClipSink = (UnsafePointer<Float>, Int, Int, Double) -> Void
+    private var clipSink: ClipSink?
+
+    var tapSampleRate: Double { sampleRate }
+
+    func setClipSink(_ sink: ClipSink?) {
+        lock.lock(); clipSink = sink; lock.unlock()
+    }
 
     private init() {
         ring = [Float](repeating: 0, count: fftSize)
@@ -230,6 +239,8 @@ final class AudioPulse {
         let frames = Int(first.mDataByteSize) / (MemoryLayout<Float>.size * channels)
         guard frames > 0 else { return }
         let samples = data.assumingMemoryBound(to: Float.self)
+        lock.lock(); let sink = clipSink; lock.unlock()
+        sink?(samples, frames, channels, sampleRate)
         for i in 0..<frames {
             var sum: Float = 0
             for c in 0..<channels { sum += samples[i * channels + c] }

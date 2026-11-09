@@ -612,6 +612,7 @@ struct DesktopEdgeGlow: View {
     var body: some View {
         let s = style.v
         let visible = s.edgeGlow && s.edgeDesktop && player.isPlaying && !player.locked && !player.previewing
+            && !player.idleShowing
         TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
             if visible { EdgeGlow(time: player.lyricTime(at: context.date), date: context.date) }
         }
@@ -675,6 +676,7 @@ private func backdropDate(_ date: Date) -> Date {
 struct StageBackdrop: View {
     @Environment(\.isWallpaper) private var wallpaper
     @Environment(\.stageScreen) private var screen
+    @Environment(\.isClip) private var clip
     @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
@@ -682,7 +684,7 @@ struct StageBackdrop: View {
 
     var body: some View {
         let s = style.v
-        let visible = wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)
+        let visible = clip || (wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s))
         // The wallpaper runs all the time, so on battery it drops to 15 frames a second.
         let fps = wallpaper && power.saving ? 15 : power.backdropFPS
         TimelineView(.animation(minimumInterval: 1 / fps, paused: !visible)) { context in
@@ -714,6 +716,7 @@ struct StageDepth: View {
     let overLyrics: Bool
     @Environment(\.isWallpaper) private var wallpaper
     @Environment(\.stageScreen) private var screen
+    @Environment(\.isClip) private var clip
     @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
@@ -721,7 +724,7 @@ struct StageDepth: View {
 
     var body: some View {
         let s = style.v
-        let visible = (wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)) && s.depth && s.depthOverLyrics == overLyrics
+        let visible = (clip || (wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s))) && s.depth && s.depthOverLyrics == overLyrics
             && StyleValues.wallpapers.contains(s.stageBackground)
         TimelineView(.animation(minimumInterval: 1 / power.backdropFPS, paused: !visible)) { context in
             let date = backdropDate(context.date)
@@ -738,6 +741,7 @@ struct StageDepth: View {
 struct StageView: View {
     @Environment(\.isWallpaper) private var wallpaper
     @Environment(\.stageScreen) private var screen
+    @Environment(\.isClip) private var clip
     @ObservedObject private var hiddenScreens = WallpaperVisibility.shared
     @ObservedObject private var style = Style.shared
     @ObservedObject private var power = Power.shared
@@ -745,7 +749,7 @@ struct StageView: View {
 
     var body: some View {
         let s = style.v
-        let visible = wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s)
+        let visible = clip || (wallpaper ? player.wallpaperVisible(s, screen: screen) : player.stageVisible(s))
         // Other displays can have a lyric style of their own.
         let layout = screen > 0 && s.secondLayout != "same" ? s.secondLayout : s.stageLayout
         // 60 fps: at ProMotion's 120 the lyrics cost twice as much for no visible gain.
@@ -862,7 +866,7 @@ struct OverlayView: View {
 
     var body: some View {
         let s = style.v
-        let visible = s.showOnDesktop && player.isPlaying && !player.locked && !player.previewing
+        let visible = s.showOnDesktop && player.isPlaying && !player.locked && !player.previewing && !player.idleShowing
         TimelineView(.animation(paused: !visible)) { context in
             VStack(alignment: s.horizontal, spacing: 14) {
                 if s.showHeader, let track = player.track {

@@ -9,9 +9,17 @@ struct FisheyeView: View {
     let time: Double
     let date: Date
     let icons: Bool
+    @Environment(\.isClip) private var clip
 
     var body: some View {
-        LensHost(content: AnyView(FisheyeWords(time: time, icons: icons)))
+        // Clips are drawn off screen, where the AppKit lens can't render, so they get the words without the glass.
+        Group {
+            if clip {
+                FisheyeWords(time: time, icons: icons)
+            } else {
+                LensHost(content: AnyView(FisheyeWords(time: time, icons: icons)))
+            }
+        }
             .shadow(color: .black.opacity(0.45), radius: 10, y: 3)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

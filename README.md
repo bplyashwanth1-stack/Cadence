@@ -126,6 +126,17 @@ to have it come back whenever they play.
 keeps the display awake while lyrics play, optional floating lyrics on the desktop, 21 bundled fonts plus every
 font on the Mac.
 
+**Sharing and extras**
+- **Record a 10-second clip** — the current look and song, with the music, as an MP4 in Movies › Cadence:
+  vertical for Stories, Reels and TikTok, square, or widescreen. From 🎤 › Record a 10-Second Clip or Settings.
+- **Lyrics when you're away** — optional: while music plays and the Mac sits untouched for a few minutes, the
+  lyrics fill the screen like a screensaver. Any key or mouse move brings the desktop back. Settings › Look.
+- **Look shortcuts** — ⌃⌥] and ⌃⌥[ step through your favourite looks from anywhere; 🎤 › Presets can heart the
+  current one.
+- **Welcome guide** on first launch, explaining the permissions and where the 🎤 lives (🎤 › Welcome Guide…).
+- **Updates itself** — when a new version is out, 🎤 › Update Available downloads it, checks its signature and
+  relaunches. Homebrew installs get the `brew upgrade` command instead.
+
 ## Requirements
 
 - macOS 14 or later (hearing the music needs 14.2, mesh gradients macOS 15, the glass bar macOS 26)
@@ -209,8 +220,8 @@ and publish `Cadence.zip`, and updates the Homebrew formula.
 
 Cadence has no account, no analytics and no tracking. What it touches:
 
-- **System audio** — analysed live on your Mac for the beat, loudness and vocal timing. It's never recorded,
-  saved or sent anywhere.
+- **System audio** — analysed live on your Mac for the beat, loudness and vocal timing. It's never sent
+  anywhere, and only saved when you record a clip, which goes to Movies › Cadence on your Mac.
 - **Spotify, Music and your browser** — read through macOS's AppleScript controls for the current song, position
   and artwork. For YouTube, Cadence finds YouTube tabs by their address and reads only the video's title, channel,
   music credits and playback position from the page.

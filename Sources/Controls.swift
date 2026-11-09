@@ -5,12 +5,12 @@ import SwiftUI
 extension NowPlaying {
     /// Whether the full-screen lock-screen view is showing.
     func stageVisible(_ s: StyleValues) -> Bool {
-        s.showOnLockScreen && ((active && locked) || previewing)
+        (s.showOnLockScreen && ((active && locked) || previewing)) || idleShowing
     }
 
     /// The stage as the desktop wallpaper: while music plays and the Mac is unlocked.
     func wallpaperVisible(_ s: StyleValues) -> Bool {
-        s.liveWallpaper && isPlaying && !locked && !previewing
+        s.liveWallpaper && isPlaying && !locked && !previewing && !idleShowing
     }
 
     /// The wallpaper on one screen, only while it can be seen.

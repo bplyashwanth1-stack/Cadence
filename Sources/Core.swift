@@ -952,6 +952,7 @@ final class NowPlaying: ObservableObject {
     @Published private(set) var duotoneCutout: NSImage?
     @Published var locked = false
     @Published var previewing = false  // shows the lock-screen view on the desktop briefly
+    @Published var idleShowing = false  // the lock-screen view as a screensaver, while you're away (IdleLyrics)
 
     // Position is interpolated between polls so animation runs at full frame rate.
     private var basePosition = 0.0

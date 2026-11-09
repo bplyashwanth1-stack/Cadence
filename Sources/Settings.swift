@@ -35,11 +35,16 @@ struct FontGallery: View {
 struct SettingsView: View {
     let preview: () -> Void
     let resetPosition: () -> Void
+    let recordClip: (ClipFormat) -> Void
     @ObservedObject private var style = Style.shared
+    @ObservedObject private var clips = ClipRecorder.shared
     @ObservedObject private var player = NowPlaying.shared
     @ObservedObject private var timing = SongTiming.shared
     @AppStorage(UpdateChecker.defaultsKey) private var checkForUpdates = true
     @AppStorage(Power.lightOnIntelKey) private var lightOnIntel = true
+    @AppStorage(IdleLyrics.enabledKey) private var idleLyrics = false
+    @AppStorage(IdleLyrics.minutesKey) private var idleMinutes = 2
+    @AppStorage(ClipRecorder.markKey) private var clipMark = true
 
     var body: some View {
         // Four tabs, so each page stays short.
@@ -51,6 +56,8 @@ struct SettingsView: View {
                     PresetPicker()
                 }
                 lockScreen
+                away
+                clipSection
             }
             .formStyle(.grouped)
             .tabItem { Label("Look", systemImage: "paintpalette") }
@@ -133,6 +140,36 @@ struct SettingsView: View {
             if !player.status.isEmpty {
                 LabeledContent("Lyrics") { Text(player.status) }
             }
+        }
+    }
+
+    /// The lock-screen view as a screensaver while music plays and you're away.
+    private var away: some View {
+        Section("When you're away") {
+            Toggle("Show the lyrics full screen while music plays", isOn: $idleLyrics)
+            if idleLyrics {
+                Picker("After", selection: $idleMinutes) {
+                    ForEach(IdleLyrics.minuteChoices, id: \.self) { Text("\($0) min").tag($0) }
+                }
+                Text("Like a screensaver: any key press or mouse move brings your desktop back.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Ten-second videos of the lock-screen view to share.
+    private var clipSection: some View {
+        Section("Clips") {
+            HStack {
+                ForEach(ClipFormat.allCases, id: \.self) { format in
+                    Button(format.title.components(separatedBy: " — ")[0]) { recordClip(format) }
+                        .disabled(clips.recording || player.track == nil)
+                }
+            }
+            Toggle("Small Cadence mark in the corner", isOn: $clipMark)
+            Text(clips.recording ? "Recording… the clip shows on screen while it records."
+                 : "Records 10 seconds of the current look and song, with the music, to Movies › Cadence.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

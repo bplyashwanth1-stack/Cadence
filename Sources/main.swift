@@ -125,6 +125,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var wallpapers: [WallpaperWindow] = []
     private var lyricsEditor: LyricsEditorWindow?
     private var settings: NSWindow?
+    private let welcome = Welcome()
+    private var welcomedAtLaunch = false
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var previewEnd: DispatchWorkItem?
@@ -138,8 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AutoSync.shared.start()
         buildMenu()
         UpdateChecker.shared.start()
-        // macOS can hide the 🎤 icon (switched off in Settings › Menu Bar, or no room beside the notch); say so once.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.explainHiddenIconIfNeeded() }
+        IdleLyrics.shared.start()
+        LookShortcuts.register()
+        // First launch: the welcome guide (which also covers a hidden icon). Otherwise, if macOS hides the 🎤 icon
+        // (switched off in Settings › Menu Bar, or no room beside the notch), say so once.
+        if !Welcome.shown {
+            welcomedAtLaunch = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openWelcome() }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            if self?.welcomedAtLaunch == false { self?.explainHiddenIconIfNeeded() }
+        }
         // The first time a browser with YouTube open refuses to run Cadence's JavaScript, say how to allow it.
         NotificationCenter.default.addObserver(forName: .youTubeBlocked, object: nil, queue: .main) { [weak self] note in
             guard let name = note.object as? String else { return }
@@ -172,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in self?.updateKeepAwake() }
             .store(in: &subscriptions)
         // The controls window only takes clicks while the bar is actually showing.
-        Publishers.CombineLatest4(player.$locked, player.$active, player.$previewing, style.$v)
+        Publishers.CombineLatest4(player.$locked, player.$active, player.$previewing.combineLatest(player.$idleShowing), style.$v)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
@@ -208,6 +219,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         distributed.addObserver(forName: .init("local.cadence.settings"), object: nil, queue: .main) { [weak self] _ in
             self?.openSettings()
+        }
+        // And record a clip: object "vertical", "square" or "wide".
+        distributed.addObserver(forName: .init("local.cadence.clip"), object: nil, queue: .main) { [weak self] note in
+            let format = ClipFormat(rawValue: note.object as? String ?? "") ?? .vertical
+            MainActor.assumeIsolated { self?.recordClip(format) }
         }
 
         // Ask for Automation permission up front, on the side. Polling starts right away rather than waiting for
@@ -334,8 +350,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Live Wallpaper on Desktop", #selector(toggleWallpaper)))
         menu.addItem(item("Edge Light", #selector(toggleEdgeLight)))
         menu.addItem(item("Shuffle Looks Each Song", #selector(toggleShuffle)))
+        menu.addItem(item("Lyrics When I'm Away", #selector(toggleIdle)))
         menu.addItem(fontMenu())
         menu.addItem(item("Preview Lock Screen (10s)", #selector(previewStage)))
+        menu.addItem(clipMenu())
         menu.addItem(.separator())
         menu.addItem(presetsMenu())
         menu.addItem(choiceMenu("Lyric Animation", [("mix", "Mix — changes every line")] + StyleValues.wordEffects,
@@ -355,6 +373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Always Use This Preset for This Artist", #selector(pinArtist)))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
+        menu.addItem(item("Welcome Guide…", #selector(openWelcome)))
         menu.addItem(timingMenu())
         let hearing = item("⚠︎ Cadence Can't Hear the Music…", #selector(explainAudio))
         hearing.isHidden = true
@@ -394,6 +413,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func fillPresets(_ submenu: NSMenu) {
         submenu.removeAllItems()
+        // Quick switching and favouriting the current look.
+        let current = Presets.current()
+        let isLiked = current.map { PresetMemory.shared.favourites.contains($0) } ?? false
+        let favourite = item(current.map { isLiked ? "Remove “\($0)” from Favourites" : "Add “\($0)” to Favourites" }
+                             ?? "Add to Favourites (pick a preset first)", #selector(toggleFavourite))
+        favourite.image = NSImage(systemSymbolName: isLiked ? "heart.slash" : "heart", accessibilityDescription: nil)
+        favourite.isEnabled = current != nil
+        submenu.addItem(favourite)
+        let next = item("Next Look", #selector(nextLook), key: "]")
+        next.keyEquivalentModifierMask = [.control, .option]
+        submenu.addItem(next)
+        let previous = item("Previous Look", #selector(previousLook), key: "[")
+        previous.keyEquivalentModifierMask = [.control, .option]
+        submenu.addItem(previous)
+        submenu.addItem(.separator())
         // Favourites right at the top, then one submenu per group.
         let favourites = PresetMemory.shared.favourites
         let liked = Presets.all(keeping: style.v).filter { favourites.contains($0.name) }
@@ -507,6 +541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "Live Wallpaper on Desktop": style.v.liveWallpaper,
             "Edge Light": style.v.edgeGlow,
             "Shuffle Looks Each Song": style.v.shuffleLooks,
+            "Lyrics When I'm Away": IdleLyrics.enabled,
             "Launch at Login": SMAppService.mainApp.status == .enabled,
         ]
         let chosen: [Selector: String] = [
@@ -535,6 +570,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleWallpaper() { style.v.liveWallpaper.toggle() }
     @objc private func toggleEdgeLight() { style.v.edgeGlow.toggle() }
     @objc private func toggleShuffle() { style.v.shuffleLooks.toggle() }
+    @objc private func toggleIdle() { IdleLyrics.enabled.toggle() }
+
+    @objc private func openWelcome() {
+        welcome.show(preview: { [weak self] in self?.preview() },
+                     iconVisible: { [weak self] in self?.statusItem.button?.window?.occlusionState.contains(.visible) ?? false })
+    }
+
+    /// Record a 10-second clip, in each shape.
+    private func clipMenu() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Record a 10-Second Clip", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for format in ClipFormat.allCases {
+            let option = item(format.title, #selector(recordClipMenu(_:)))
+            option.representedObject = format.rawValue
+            submenu.addItem(option)
+        }
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func nextLook() { Presets.step(1) }
+    @objc private func previousLook() { Presets.step(-1) }
+    @objc private func toggleFavourite() {
+        guard let name = Presets.current() else { return }
+        PresetMemory.shared.toggleFavourite(name)
+    }
 
     /// The featured fonts, quick to reach from the menu bar; each shows in its own typeface.
     private func fontMenu() -> NSMenuItem {
@@ -618,6 +679,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         UpdateChecker.shared.showUpdate()
     }
 
+    /// Records a 10-second clip of the lock-screen view, then shows it in Finder.
+    @MainActor func recordClip(_ format: ClipFormat) {
+        ClipRecorder.shared.record(format) { result in
+            switch result {
+            case .success(let url):
+                PresetToast.shared.show(ClipRecorder.shared.withSound ? "Clip saved to Movies › Cadence"
+                                        : "Clip saved, without sound (Cadence couldn't hear the music)",
+                                        "checkmark.circle.fill")
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            case .failure(let error):
+                Log.write("clip failed: \(error.localizedDescription)")
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert()
+                alert.messageText = "Couldn't record a clip"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
+    }
+
+    @MainActor @objc private func recordClipMenu(_ sender: NSMenuItem) {
+        recordClip(ClipFormat(rawValue: sender.representedObject as? String ?? "") ?? .vertical)
+    }
+
     /// What to do when the music can't be heard, depending on how it's failing.
     @objc private func explainAudio() {
         NSApp.activate(ignoringOtherApps: true)
@@ -694,7 +779,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openSettings() {
         if settings == nil {
             let view = SettingsView(preview: { [weak self] in self?.preview() },
-                                    resetPosition: { [weak self] in self?.resetPosition() })
+                                    resetPosition: { [weak self] in self?.resetPosition() },
+                                    recordClip: { [weak self] format in MainActor.assumeIsolated { self?.recordClip(format) } })
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Cadence"
             window.styleMask = [.titled, .closable, .miniaturizable]
