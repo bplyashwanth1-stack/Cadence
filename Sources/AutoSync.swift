@@ -259,8 +259,21 @@ final class Power: ObservableObject {
         }
     }
 
-    /// Battery saver is on and the Mac is unplugged.
-    var saving: Bool { onBattery && Style.shared.v.batterySaver }
+    /// Running on an Intel Mac, whose graphics are much weaker than Apple silicon's.
+    static let isIntel: Bool = {
+        #if arch(x86_64)
+        return true
+        #else
+        return false
+        #endif
+    }()
+    static let lightOnIntelKey = "lightOnIntel"
+
+    /// Intel Macs get the lighter visuals all the time, unless that's turned off in Settings.
+    var intelLight: Bool { Self.isIntel && (UserDefaults.standard.object(forKey: Self.lightOnIntelKey) as? Bool ?? true) }
+
+    /// Lighter visuals: battery saver on and the Mac unplugged, or an Intel Mac.
+    var saving: Bool { (onBattery && Style.shared.v.batterySaver) || intelLight }
 
     /// Frame rates for the lock-screen layers.
     var backdropFPS: Double { saving ? 20 : 30 }

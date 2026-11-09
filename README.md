@@ -6,7 +6,8 @@ over a moving wallpaper made from the album art that hits on the beat.
 
 ## Install
 
-Needs an Apple silicon Mac (M1 or later) on macOS 14 or later.
+Works on any Mac with macOS 14 or later, Apple silicon or Intel. Intel Macs use lighter visuals so the
+animation stays smooth (you can switch that off in **Settings › Lock screen**).
 
 **Download** — grab `Cadence.zip` from the [latest release](https://github.com/bplyashwanth1-stack/Cadence/releases/latest),
 unzip it and drag `Cadence.app` to Applications. Cadence isn't notarized by Apple, so the first time you open it
@@ -126,7 +127,7 @@ font on the Mac.
 ## Requirements
 
 - macOS 14 or later (hearing the music needs 14.2, mesh gradients macOS 15, the glass bar macOS 26)
-- Apple silicon
+- Apple silicon or Intel (`build.sh` builds for the Mac you're on)
 - Xcode command line tools (`xcode-select --install`)
 
 ## Build and install

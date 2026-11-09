@@ -33,7 +33,12 @@ jobs:
           VERSION="${TAG#v}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
           cp Fonts/*.ttf "$APP/Contents/Resources/Fonts/"
-          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o "$APP/Contents/MacOS/Cadence"
+          # One app for both Apple silicon and Intel: build each, then join them.
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o build/Cadence-arm64 & arm=$!
+          swiftc -O -swift-version 5 -target x86_64-apple-macos14.0 Sources/*.swift -o build/Cadence-x86_64 & intel=$!
+          wait $arm; wait $intel
+          lipo -create build/Cadence-arm64 build/Cadence-x86_64 -output "$APP/Contents/MacOS/Cadence"
+          lipo -info "$APP/Contents/MacOS/Cadence"
           codesign --force --sign - "$APP"
           ditto -c -k --keepParent "$APP" build/Cadence.zip
 
@@ -45,7 +50,7 @@ jobs:
 
           Cadence isn't notarized by Apple, so the first time you open it macOS will block it. Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway** (on macOS 14 you can also right-click the app and choose **Open**). You only do this once.
 
-          Needs an Apple silicon Mac on macOS 14 or later. Prefer Homebrew? \`brew install bplyashwanth1-stack/tap/cadence\`"
+          Works on Apple silicon and Intel Macs with macOS 14 or later. Prefer Homebrew? \`brew install bplyashwanth1-stack/tap/cadence\`"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" build/Cadence.zip --clobber
           else

@@ -14,4 +14,6 @@ jobs:
       - name: Compile
         run: |
           swiftc --version
-          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o Cadence
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o Cadence-arm64 & arm=$!
+          swiftc -O -swift-version 5 -target x86_64-apple-macos14.0 Sources/*.swift -o Cadence-x86_64 & intel=$!
+          wait $arm; wait $intel
