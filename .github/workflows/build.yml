@@ -1,0 +1,17 @@
+# Compiles Cadence on every push and pull request, so a broken build is caught before a release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: |
+          swiftc --version
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o Cadence

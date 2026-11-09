@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Cadence isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead. A screenshot or screen recording helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      placeholder: |
+        1. Play a song in Spotify
+        2. Lock the Mac
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Cadence version
+      description: From Finder › Applications › Cadence › Get Info, or the release you downloaded.
+      placeholder: "1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac
+      placeholder: macOS 15.3, MacBook Air M2
+    validations:
+      required: true
+  - type: dropdown
+    id: player
+    attributes:
+      label: Playing from
+      multiple: true
+      options: [Spotify, Apple Music, YouTube in a browser, Other]
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options: [Downloaded zip, Homebrew, Built from source]
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Paste the end of `~/Library/Logs/Cadence.log` (in Finder, press ⌘⇧G and paste that path).
+      render: text

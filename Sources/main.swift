@@ -137,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ = Fonts.bundled  // registers the bundled fonts before any view uses them
         AutoSync.shared.start()
         buildMenu()
+        UpdateChecker.shared.start()
         // The first time a browser with YouTube open refuses to run Cadence's JavaScript, say how to allow it.
         NotificationCenter.default.addObserver(forName: .youTubeBlocked, object: nil, queue: .main) { [weak self] note in
             guard let name = note.object as? String else { return }
@@ -322,6 +323,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "music.mic", accessibilityDescription: "Cadence")
         let menu = NSMenu()
         menu.delegate = self
+        let update = item("Update Available…", #selector(showUpdate))
+        update.isHidden = true
+        menu.addItem(update)
         menu.addItem(item("Show on Lock Screen", #selector(toggleLockScreen)))
         menu.addItem(item("Show on Desktop", #selector(toggleDesktop)))
         menu.addItem(item("Live Wallpaper on Desktop", #selector(toggleWallpaper)))
@@ -468,6 +472,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        for entry in menu.items where entry.action == #selector(showUpdate) {
+            let version = UpdateChecker.shared.available
+            entry.isHidden = version == nil
+            entry.title = "Update Available: Cadence \(version ?? "")…"
+        }
         for entry in menu.items where entry.action == #selector(explainAudio) {
             entry.isHidden = !(style.v.audioReactive && player.isPlaying && AudioPulse.shared.health() != .fine
                                && AudioPulse.shared.health() != .notRunning)
@@ -600,6 +609,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let id = player.track?.id else { return }
         SongTiming.shared.removeTapped(id)
         player.reloadLyrics()
+    }
+
+    @objc private func showUpdate() {
+        UpdateChecker.shared.showUpdate()
     }
 
     /// What to do when the music can't be heard, depending on how it's failing.

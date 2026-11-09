@@ -196,6 +196,22 @@ time it finds YouTube open, and **Set Up YouTube…** in the menu shows it again
 | `Sources/Controls.swift` | Now-playing bar, hover controls, scrubbing |
 | `Sources/Settings.swift` | Settings window |
 
+## Privacy
+
+Cadence has no account, no analytics and no tracking. What it touches:
+
+- **System audio** — analysed live on your Mac for the beat, loudness and vocal timing. It's never recorded,
+  saved or sent anywhere.
+- **Spotify, Music and your browser** — read through macOS's AppleScript controls for the current song, position
+  and artwork. For YouTube, Cadence finds YouTube tabs by their address and reads only the video's title, channel,
+  music credits and playback position from the page.
+- **Network** — only these requests, and only the song's title, artist, album and length are sent:
+  - lyrics lookups to [LRCLIB](https://lrclib.net), NetEase, KuGou and lyrics.ovh
+  - album art from Spotify's image server or YouTube's thumbnail server
+  - once a day, GitHub's public API to see if a newer version is out (turn off in **Settings › Lock screen**)
+- **Translation** — done on your Mac with Apple's built-in translation.
+- **Your edits** — kept on your Mac, or in your own iCloud Drive if you turn that on.
+
 ## Notes
 
 - Showing windows above the lock screen uses private SkyLight APIs, so this can't ship on the Mac App Store and

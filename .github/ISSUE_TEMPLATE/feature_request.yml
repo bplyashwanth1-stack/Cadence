@@ -1,0 +1,11 @@
+name: Idea or request
+description: A new look, a new player, or something that would make Cadence better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Links or pictures of a lyric style, visual or app you have in mind are welcome.
+    validations:
+      required: true

@@ -38,6 +38,7 @@ struct SettingsView: View {
     @ObservedObject private var style = Style.shared
     @ObservedObject private var player = NowPlaying.shared
     @ObservedObject private var timing = SongTiming.shared
+    @AppStorage(UpdateChecker.defaultsKey) private var checkForUpdates = true
 
     var body: some View {
         // Four tabs, so each page stays short.
@@ -299,6 +300,8 @@ struct SettingsView: View {
             Toggle("Now-playing bar (hover for controls)", isOn: $style.v.stageFooter)
             Toggle("Keep screen awake while playing", isOn: $style.v.keepAwake)
             Toggle("Battery saver — lighter visuals when unplugged", isOn: $style.v.batterySaver)
+            Toggle("Tell me when a new version is out", isOn: $checkForUpdates)
+                .onChange(of: checkForUpdates) { UpdateChecker.shared.check() }
             Button("Preview for 10 seconds", action: preview)
         }
     }
