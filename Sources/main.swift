@@ -210,15 +210,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.openSettings()
         }
 
-        // Ask for Automation permission up front, then start polling once it's answered.
+        // Ask for Automation permission up front, on the side. Polling starts right away rather than waiting for
+        // the answer: macOS's permission check can hang indefinitely, which left Cadence never following the music.
         DispatchQueue.global().async {
             for app in NSWorkspace.shared.runningApplications {
                 if let id = app.bundleIdentifier, ["com.spotify.client", "com.apple.Music"].contains(id) {
                     Player.requestPermission(bundleID: id)
                 }
             }
-            DispatchQueue.main.async { self.startPolling() }
         }
+        startPolling()
     }
 
     private func startPolling() {
