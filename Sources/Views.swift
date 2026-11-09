@@ -839,11 +839,15 @@ struct OverlayBackground: View {
         case "blur":
             VisualEffect().clipShape(shape).opacity(s.backgroundOpacity)
         case "glass":
+            #if compiler(>=6.2)
             if #available(macOS 26.0, *) {
                 shape.fill(Color.black.opacity(0.15 * s.backgroundOpacity)).glassEffect(.regular, in: shape)
             } else {
                 VisualEffect().clipShape(shape).opacity(s.backgroundOpacity)
             }
+            #else
+            VisualEffect().clipShape(shape).opacity(s.backgroundOpacity)
+            #endif
         case "dim":
             shape.fill(Color.black.opacity(s.backgroundOpacity))
         default:

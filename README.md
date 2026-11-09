@@ -4,6 +4,26 @@ Synced lyrics for your Mac's lock screen, styled like a lyric edit. While music 
 YouTube (in Chrome, Safari, Arc, Brave, Edge or Vivaldi) and the Mac is locked, Cadence fills the screen with the song's lyrics, animated word by word as they're sung,
 over a moving wallpaper made from the album art that hits on the beat.
 
+## Install
+
+Needs an Apple silicon Mac (M1 or later) on macOS 14 or later.
+
+**Download** — grab `Cadence.zip` from the [latest release](https://github.com/bplyashwanth1-stack/Cadence/releases/latest),
+unzip it and drag `Cadence.app` to Applications. Cadence isn't notarized by Apple, so the first time you open it
+macOS blocks it: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only
+do this once.
+
+**Homebrew** — builds it on your Mac, so there's no warning:
+
+```sh
+brew install bplyashwanth1-stack/tap/cadence
+```
+
+Then open Cadence from Applications (Homebrew prints the one-line command to put it there). Update with
+`brew upgrade cadence`.
+
+Or build it yourself: see [Build and install](#build-and-install).
+
 ## Features
 
 **Lyrics**
@@ -164,6 +184,7 @@ time it finds YouTube open, and **Set Up YouTube…** in the menu shows it again
 | `Sources/VisualsMore.swift` | More visuals: contours, molten, terraces, silk, ink, tunnel, wire sea, city, ringed planet, shoal, warp |
 | `Sources/VisualsExtra.swift` | Paper bird, freefall, light hall, TV wall, neon lattice, northern lights, dunes, lagoon, canyon, helix, clockwork, glass swirl, gravity well, wood grain |
 | `Sources/KineticLyrics.swift` | The seventeen kinetic lyric styles |
+| `Sources/Translation.swift` | On-device translation of lyrics into your Mac's language (macOS 15+) |
 | `Sources/Harmony.swift` | Lyric colours from one source colour in six harmonies |
 | `Sources/LyricsEditor.swift` | Editing and importing your own lyrics |
 | `Sources/VisualLyrics.swift` | Column, big word, extruded and tape lyrics, and the look matched to each visual |

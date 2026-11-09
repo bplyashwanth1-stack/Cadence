@@ -217,11 +217,16 @@ struct NowPlayingBar: View {
 
     @ViewBuilder
     private func glass(_ shape: RoundedRectangle) -> some View {
+        // glassEffect only exists in the macOS 26 SDK; older toolchains build the fallback alone.
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             shape.fill(Color.black.opacity(0.12)).glassEffect(.regular, in: shape)
         } else {
             VisualEffect().clipShape(shape)
         }
+        #else
+        VisualEffect().clipShape(shape)
+        #endif
     }
 }
 

@@ -1,0 +1,53 @@
+# Builds Cadence.app and attaches Cadence.zip to a GitHub Release whenever a version tag (v1.0, v1.1, …) is pushed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build Cadence.app
+        run: |
+          set -e
+          swiftc --version
+          APP=build/Cadence.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Fonts"
+          cp Info.plist "$APP/Contents/"
+          VERSION="${TAG#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+          cp Fonts/*.ttf "$APP/Contents/Resources/Fonts/"
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/*.swift -o "$APP/Contents/MacOS/Cadence"
+          codesign --force --sign - "$APP"
+          ditto -c -k --keepParent "$APP" build/Cadence.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Download **Cadence.zip**, unzip it and drag **Cadence.app** to Applications.
+
+          Cadence isn't notarized by Apple, so the first time you open it macOS will block it. Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway** (on macOS 14 you can also right-click the app and choose **Open**). You only do this once.
+
+          Needs an Apple silicon Mac on macOS 14 or later. Prefer Homebrew? \`brew install bplyashwanth1-stack/tap/cadence\`"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/Cadence.zip --clobber
+          else
+            gh release create "$TAG" build/Cadence.zip --title "Cadence ${TAG#v}" --notes "$NOTES"
+          fi
