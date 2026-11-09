@@ -4,6 +4,8 @@ Synced lyrics for your Mac's lock screen, styled like a lyric edit. While music 
 YouTube (in Chrome, Safari, Arc, Brave, Edge or Vivaldi) and the Mac is locked, Cadence fills the screen with the song's lyrics, animated word by word as they're sung,
 over a moving wallpaper made from the album art that hits on the beat.
 
+<p align="center"><img src="docs/preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen" width="640"></p>
+
 ## Install
 
 Works on any Mac with macOS 14 or later, Apple silicon or Intel. Intel Macs use lighter visuals so the
