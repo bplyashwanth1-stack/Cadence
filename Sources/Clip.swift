@@ -18,13 +18,14 @@ extension EnvironmentValues {
 }
 
 enum ClipFormat: String, CaseIterable {
-    case vertical, square, wide
+    case vertical, square, wide, wide4k
 
     var title: String {
         switch self {
         case .vertical: return "Vertical — Stories, Reels, TikTok"
         case .square: return "Square — posts"
         case .wide: return "Widescreen — YouTube, X"
+        case .wide4k: return "4K widescreen — sharpest, slower to make"
         }
     }
 
@@ -34,11 +35,13 @@ enum ClipFormat: String, CaseIterable {
         case .vertical: return CGSize(width: 1080, height: 1920)
         case .square: return CGSize(width: 1080, height: 1080)
         case .wide: return CGSize(width: 1920, height: 1080)
+        case .wide4k: return CGSize(width: 3840, height: 2160)
         }
     }
 
     /// The stage is laid out at this many points per pixel, close to a laptop screen's text size.
-    var scale: CGFloat { self == .vertical ? 1.5 : 1.25 }
+    /// 4K uses twice the scale of widescreen so it lays out identically, just sharper.
+    var scale: CGFloat { self == .vertical ? 1.5 : self == .wide4k ? 2.5 : 1.25 }
 }
 
 /// What a clip shows: the lock-screen layers (without the now-playing bar), and a small Cadence mark.
@@ -138,7 +141,7 @@ final class ClipRecorder: ObservableObject {
             AVVideoWidthKey: Int(size.width),
             AVVideoHeightKey: Int(size.height),
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 14_000_000,
+                AVVideoAverageBitRateKey: size.width > 2000 ? 50_000_000 : 14_000_000,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
             ],
         ])

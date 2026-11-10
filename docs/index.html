@@ -52,7 +52,7 @@ background:linear-gradient(180deg,#fff 40%,#9b9ba4);-webkit-background-clip:text
 .screen:after{filter:blur(28px);opacity:.75;inset:-8px}
 @property --a{syntax:'<angle>';initial-value:0deg;inherits:false}
 @keyframes spin{to{--a:360deg}}
-.screen img{position:relative;z-index:2;display:block;width:100%;border-radius:24px;background:#000;border:6px solid #000}
+.screen img,.screen video{position:relative;z-index:2;display:block;width:100%;border-radius:24px;background:#000;border:6px solid #000}
 
 /* sections */
 section{padding:130px 0 0}
@@ -126,7 +126,8 @@ footer a:hover{color:#fff}
     <a class="pill" href="https://github.com/bplyashwanth1-stack/Cadence">★ View on GitHub</a>
   </div>
   <p class="note">Menu bar app · Spotify, Apple Music and YouTube · macOS 14 or later · Apple silicon and Intel</p>
-  <div class="screen"><img src="preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen"></div>
+  <div class="screen"><video autoplay muted loop playsinline preload="auto" poster="poster.jpg" aria-label="Cadence showing animated lyrics on the Mac lock screen"><source src="preview.mp4" type="video/mp4"></video></div>
+  <p class="note"><a href="preview-4k.mp4" style="text-decoration:underline;text-underline-offset:3px">Watch it in 4K · 60 fps</a></p>
 </header>
 
 <div class="marquee" aria-hidden="true"><div>

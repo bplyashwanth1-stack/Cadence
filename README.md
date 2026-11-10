@@ -21,7 +21,7 @@
   <a href="#privacy">Privacy</a>
 </p>
 
-<p align="center"><img src="docs/preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen" width="720"></p>
+<p align="center"><img src="docs/preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen" width="720"><br><sub><a href="https://bplyashwanth1-stack.github.io/Cadence/preview-4k.mp4">Watch it in 4K · 60 fps</a></sub></p>
 
 ---
 
@@ -172,7 +172,7 @@ font on the Mac.
 
 **Sharing and extras**
 - **Record a 10-second clip** — the current look and song, with the music, as an MP4 in Movies › Cadence:
-  vertical for Stories, Reels and TikTok, square, or widescreen. From 🎤 › Record a 10-Second Clip or Settings.
+  vertical for Stories, Reels and TikTok, square, widescreen, or 4K widescreen. From 🎤 › Record a 10-Second Clip or Settings.
 - **Lyrics when you're away** — optional: while music plays and the Mac sits untouched for a few minutes, the
   lyrics fill the screen like a screensaver. Any key or mouse move brings the desktop back. Settings › Look.
 - **Look shortcuts** — ⌃⌥] and ⌃⌥[ step through your favourite looks from anywhere; 🎤 › Presets can heart the
