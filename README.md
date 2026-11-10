@@ -1,33 +1,77 @@
-# Cadence
+<p align="center"><img src="docs/hero.svg" alt="Cadence: lyrics for your lock screen" width="100%"></p>
 
-Synced lyrics for your Mac's lock screen, styled like a lyric edit. While music plays in Spotify, Apple Music or
-YouTube (in Chrome, Safari, Arc, Brave, Edge or Vivaldi) and the Mac is locked, Cadence fills the screen with the song's lyrics, animated word by word as they're sung,
-over a moving wallpaper made from the album art that hits on the beat.
+<p align="center">
+  <b>Synced lyrics for your Mac's lock screen, styled like a lyric edit.</b><br>
+  Animated word by word, over a moving wallpaper made from the album art that hits on the beat.
+</p>
 
-<p align="center"><img src="docs/preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen" width="640"></p>
+<p align="center">
+  <a href="https://github.com/bplyashwanth1-stack/Cadence/releases/latest"><img src="https://img.shields.io/github/v/release/bplyashwanth1-stack/Cadence?style=for-the-badge&color=7c3aed&label=Download" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-18181b?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-18181b?style=for-the-badge" alt="Universal">
+  <img src="https://img.shields.io/github/license/bplyashwanth1-stack/Cadence?style=for-the-badge&color=18181b" alt="MIT">
+</p>
 
-## Install
+<p align="center">
+  <a href="https://bplyashwanth1-stack.github.io/Cadence/">Website</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#privacy">Privacy</a>
+</p>
 
-Works on any Mac with macOS 14 or later, Apple silicon or Intel. Intel Macs use lighter visuals so the
-animation stays smooth (you can switch that off in **Settings › Lock screen**).
+<p align="center"><img src="docs/preview.gif" alt="Cadence showing animated lyrics on the Mac lock screen" width="720"></p>
 
-**Download** — grab `Cadence.zip` from the [latest release](https://github.com/bplyashwanth1-stack/Cadence/releases/latest),
-unzip it and drag `Cadence.app` to Applications. Cadence isn't notarized by Apple, so the first time you open it
-macOS blocks it: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only
-do this once.
+---
 
-**Homebrew** — builds it on your Mac, so there's no warning:
+<sub>WHAT IT DOES</sub>
+
+## One song, every way to read it
+
+| 🎤 **Word by word** | 🌌 **Moves with the beat** | 💡 **Edge light** | 🎛 **88 presets** |
+|---|---|---|---|
+| 17 word animations and 17 kinetic styles, timed to the voice. | Album-art wallpapers and 40+ generated visuals that hit on the real bass. | A glowing rim around the screen in album colours, on the lock screen or desktop. | One click, or shuffle a new look for every song. |
+
+| 📺 **Spotify, Music, YouTube** | 🌐 **Every language** | ✂️ **Yours to fix** | 🎬 **Share it** |
+|---|---|---|---|
+| Chrome, Safari, Arc, Brave, Edge, Vivaldi too. | Hindi and Telugu in English letters, plus on-device translation. | Edit lyrics, nudge timing, tap to sync. | Record a 10-second clip for Reels, TikTok or Stories. |
+
+---
+
+<sub>SET UP</sub>
+
+## Install in four steps
+
+<table>
+<tr>
+<td width="25%"><h3>1</h3><b>Download</b><br>Grab <code>Cadence.zip</code> from the <a href="https://github.com/bplyashwanth1-stack/Cadence/releases/latest">latest release</a>, or use Homebrew below.</td>
+<td width="25%"><h3>2</h3><b>Move it</b><br>Unzip and drag <code>Cadence.app</code> to Applications.</td>
+<td width="25%"><h3>3</h3><b>Open anyway</b><br>Not notarized, so macOS blocks the first launch: <b>System Settings › Privacy &amp; Security › Open Anyway</b>. Once.</td>
+<td width="25%"><h3>4</h3><b>Press play</b><br>Allow the permissions, play a song and lock your Mac (⌃⌘Q).</td>
+</tr>
+</table>
+
+**Homebrew** builds it on your Mac, so there's no warning:
 
 ```sh
 brew install bplyashwanth1-stack/tap/cadence
 ```
 
 Then open Cadence from Applications (Homebrew prints the one-line command to put it there). Update with
-`brew upgrade cadence`.
+`brew upgrade cadence`. Or build it yourself: see [Build and install](#build-and-install).
 
-Or build it yourself: see [Build and install](#build-and-install).
+Works on any Mac with macOS 14 or later. Intel Macs use lighter visuals so the animation stays smooth
+(switch that off in **Settings › Lock screen**).
+
+---
+
+<sub>EVERYTHING IN THE BOX</sub>
 
 ## Features
+
+<details>
+<summary><b>Show the full feature list</b></summary>
 
 **Lyrics**
 - **17 word animations** — comet, neon, glitch, slam, scramble, cascade, flip, highlighter, shine, reveal,
@@ -137,6 +181,10 @@ font on the Mac.
 - **Updates itself** — when a new version is out, 🎤 › Update Available downloads it, checks its signature and
   relaunches. Homebrew installs get the `brew upgrade` command instead.
 
+</details>
+
+---
+
 ## Requirements
 
 - macOS 14 or later (hearing the music needs 14.2, mesh gradients macOS 15, the glass bar macOS 26)
@@ -181,6 +229,9 @@ and publish `Cadence.zip`, and updates the Homebrew formula.
 
 ## Project layout
 
+<details>
+<summary><b>File-by-file layout</b></summary>
+
 | File | What's in it |
 |---|---|
 | `Sources/main.swift` | App delegate, windows (lock screen, live wallpaper), menu bar, keep-awake |
@@ -215,6 +266,37 @@ and publish `Cadence.zip`, and updates the Homebrew formula.
 | `Sources/Aurora.swift` | Aurora background; artwork processing (blur, duotone, subject cut-out); grain |
 | `Sources/Controls.swift` | Now-playing bar, hover controls, scrubbing |
 | `Sources/Settings.swift` | Settings window |
+
+</details>
+
+## FAQ
+
+<details><summary><b>Why does macOS say Cadence can't be opened?</b></summary>
+
+It isn't notarized by Apple. Open **System Settings › Privacy &amp; Security**, scroll down and click **Open Anyway**. You only do this once. Installing with Homebrew avoids it.
+</details>
+
+<details><summary><b>I can't see the 🎤 icon.</b></summary>
+
+Turn Cadence on under **System Settings › Menu Bar › Allow in the Menu Bar**, or make room if the menu bar is full and the icon is behind the notch. Opening Cadence again from Applications always shows its settings.
+</details>
+
+<details><summary><b>The lyrics are early or late.</b></summary>
+
+Cadence auto-fixes timing and compensates for Bluetooth delay. For a stubborn song, nudge it from the menu bar (This Song's Timing) or use **Tap to Sync**. Your fix is remembered.
+</details>
+
+<details><summary><b>Does it work with YouTube?</b></summary>
+
+Yes, in Chrome, Safari, Arc, Brave, Edge and Vivaldi. The browser has to allow JavaScript from Apple Events once; Cadence walks you through it.
+</details>
+
+<details><summary><b>Is anything sent anywhere?</b></summary>
+
+Only the song's title, artist, album and length, to look up lyrics. Audio is analysed on your Mac and never leaves it. See [Privacy](#privacy).
+</details>
+
+---
 
 ## Privacy
 
